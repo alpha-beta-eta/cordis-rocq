@@ -12,6 +12,8 @@ of dsh plugins; plugins' business logic is out of scope.
   against the confluence theorem's assumptions.
 - [docs/PLUGIN-AUDIT.md](docs/PLUGIN-AUDIT.md): the six most downloaded third-party
   dsh plugins, checked against the component obligations, and what the model lacks.
+- [docs/OPLIB.md](docs/OPLIB.md): the contribution model, a restricted operation library
+  (read a frozen part, put a contribution) that meets the service hypotheses by construction.
 
 Build (Rocq 9.1):
 
@@ -42,6 +44,8 @@ sh build.sh
 | `Bridge.v` | §3 to §4: §3.1 read up to ≃ and partially; programs as effect functions (⟦·⟧); key commutativity (Def 39) implies the calculus's hypotheses |
 | `Examples/Composed.v` | a registry and listeners side by side |
 | `Derived.v` | derived forms: isolation as a key renaming of the table; the availability check |
+| `Summary.v` | the summary theorem: service specification (two tiers) and component obligations |
+| `Services/Tiers.v` | the two tiers on three services: registry, listeners, a variable store |
 
 ## Metatheory map
 
@@ -67,6 +71,7 @@ sh build.sh
 | ⟦·⟧ commutes with the steps: an op or provision step is one stage of `denote`; its undo applies that stage's inverse | `Bridge.v`: `op_stage`, `op_undo`, `prov_stage`, `prov_undo` |
 | A fiber loading by itself to Active reaches the store `denote` gives; its new undo items compose to `denote`'s inverse | `Bridge.v`: `lone_denote` |
 | Dispatch on the ordered bus admits no equivalence under which registrations commute | `Observe.v`: `bus_no_commute` |
+| Summary: specification + obligations give safety, liveness, recovery, confluence | `Summary.v`: `summary_wf`, `summary_live`, `summary_recovery`, `summary_confluence`, `summary_static` |
 
 ## Service coverage
 
@@ -76,6 +81,7 @@ sh build.sh
 | Listener registration, up to order | `Services/Listeners.v`: `listeners_hyps`, `listeners_confluence` |
 | Ordered event bus: registrations do not commute; unregister-by-callback is not an inverse | `Services/EventBus.v`: `on_not_commute`, `on_by_callback_not_witnessed` |
 | Registry and listeners together | `Examples/Composed.v`: `composed_confluence` |
+| The two tiers are independent: registry meets both; listeners are confluent but revertible only for distinct callbacks; a variable store is revertible but confluent for no relation | `Services/Tiers.v`: `registry_revertible`, `registry_confluent`, `listeners_not_revertible`, `listeners_revertible`, `listeners_confluent`, `store_revertible`, `store_not_confluent` |
 
 ## §3.1 map
 

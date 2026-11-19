@@ -29,3 +29,5 @@ theories/Services/RegistryConf.v
 theories/Services/Listeners.v
 theories/Examples/Composed.v
 theories/Derived.v
+theories/Summary.v
+theories/Services/Tiers.v
