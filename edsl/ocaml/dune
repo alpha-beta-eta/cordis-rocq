@@ -1,0 +1,5 @@
+(dirs :standard \ bad)
+
+(executable
+ (name gen)
+ (modules sym interp keys examples negative gen))

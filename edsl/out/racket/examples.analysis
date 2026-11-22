@@ -1,0 +1,14 @@
+tools-host: paths=1 maxlen=1 read=() read?=() put=() provide=(tools) spawn=() OK
+config: paths=1 maxlen=1 read=() read?=() put=() provide=(config) spawn=() OK
+shell: paths=1 maxlen=2 read=() read?=() put=(tools) provide=() spawn=() OK
+alias: paths=1 maxlen=1 read=() read?=() put=(tools) provide=() spawn=() OK
+pet-helper: paths=1 maxlen=1 read=() read?=() put=(tools) provide=() spawn=() OK
+pet: paths=3 maxlen=5 read=() read?=(config) put=(tools) provide=() spawn=(pet-helper) OK
+shell-plus: paths=1 maxlen=1 read=() read?=() put=(tools) provide=() spawn=() OK
+rank alias = 2
+rank config = 0
+rank pet = 1
+rank pet-helper = 2
+rank shell = 2
+rank shell-plus = 2
+rank tools-host = 0

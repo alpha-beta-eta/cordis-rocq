@@ -95,7 +95,7 @@ view : F × Multiset C → R
 ## 6. 代价
 
 1. **启动程序不能根据共享状态做分支。** `Put` 没有结果,`Read` 读的是常量。程序退化成:读提供者的配置,
-   做出一组贡献,spawn 一些子 fiber。`proto/mini.rkt` 中 `alias` 那种"先查 `ls`,有就起别名"的写法不再能表达。
+   做出一组贡献,spawn 一些子 fiber。原型中 `alias` 那种"先查 `ls`,有就起别名"的写法不再能表达。
    可以表达的替代:把别名做成一个贡献,由 view 在 `ls` 存在时才让它生效。
    这正是本方案的意图:依赖时机的读取是合流失败的根源(审计结论 2)。
 2. **重名不再在登记时报错。** 冲突由 view 呈现,宿主决定怎么处理(拒绝调用、警告、取胜者)。
@@ -120,7 +120,7 @@ view : F × Multiset C → R
 4. 陈述 view 的性质:两个 ≃ 的状态 view 相同。这样合流与恢复精确性的结论(状态在 ≃ 下相同)
    直接推出宿主看到的含义相同。
 
-**Racket(`dsh.rkt`):** 把 `register`/`lookup`/`on` 换成 `Read` 与 `Put`,加上几个 view;
+**Racket(`cordis.rkt`):** 把 `register`/`lookup`/`on` 换成 `Read` 与 `Put`,加上几个 view;
 随机调度测试改为比较 view 的值。可以先于 Rocq 做,用来尽早找反例。
 
 ## 8. 待定问题

@@ -1,0 +1,7 @@
+(plugin "tools-host" (inject) (optional) (provide "tools") (provide "tools" (record ("kind" (lit "tools"))) (done)))
+(plugin "config" (inject) (optional) (provide "config") (provide "config" (record ("enabled" (lit true)) ("prefix" (lit "pet"))) (done)))
+(plugin "shell" (inject "tools") (optional) (provide) (put "tools" (record ("name" (lit "ls")) ("prio" (lit 0)) ("exec" (js "payload/echo.js" (lit "ls")))) (put "tools" (record ("name" (lit "cat")) ("prio" (lit 0)) ("exec" (js "payload/echo.js" (lit "cat")))) (done))))
+(plugin "alias" (inject "tools") (optional) (provide) (put "tools" (record ("name" (lit "dir")) ("prio" (lit 0)) ("alias" (lit "ls")) ("when" (lit "ls"))) (done)))
+(plugin "pet-helper" (inject "tools") (optional) (provide) (put "tools" (record ("name" (lit "pet-help")) ("prio" (lit 0)) ("exec" (js "payload/echo.js" (lit "pet-help")))) (done)))
+(plugin "pet" (inject "tools") (optional "config") (provide) (read? "config" x1 (seq (if (present (var x1)) (if (field (var x1) "enabled") (put "tools" (record ("name" (field (var x1) "prefix")) ("prio" (lit 1)) ("exec" (js "payload/echo.js" (field (var x1) "prefix")))) (done)) (done)) (done)) (resource "payload/timer.js" ((lit "pet")) (on "agent/created" x2 (put "tools" (record ("restrict" (field (var x2) "agent")) ("deny" (lit "rm"))) (done)) (spawn "pet-helper" (done)))))))
+(plugin "shell-plus" (inject "tools") (optional) (provide) (put "tools" (record ("name" (lit "ls")) ("prio" (lit 5)) ("exec" (js "payload/echo.js" (lit "ls --color")))) (done)))
