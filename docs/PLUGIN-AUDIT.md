@@ -1,174 +1,229 @@
 # 第三方 dsh 插件的生命周期审计
 
-排查对象:npm 上月下载量最高的 6 个第三方 dsh 插件(2026-11-12 统计,排除目录与数据包)。目的是
-看真实插件的生命周期骨架能否按插件义务 C(RULES.md 第 1 节)自动检查,以及模型缺什么。
+**排查对象**：npm 上月下载量最高的 26 个第三方 dsh 插件，2026-11-23 统计，用 `api.npmjs.org` 的 last-month 数据。
 
-| 插件 | 版本 | 月下载量 | 源码 |
-|---|---|---|---|
-| dshmarket | 1.73.18 | ~121 万 | `github.com/dsh-market/dsh-market` |
-| dsh-windows-mcp | 0.2.8 | ~75 万 | `github.com/helloHub1212/dsh-windows-mcp` |
-| dsh-pet | 0.4.7 | ~55 万 | `github.com/PC2005-cloud/dsh-pet` |
-| dsh-context | 0.83.1 | ~46 万 | `github.com/bowenliang123/dsh-context` |
-| dsh-whale-widget | 0.4.2 | ~45 万 | npm 包(GitHub 仓库未能克隆) |
-| dsh-ops | 0.5.4 | ~20 万 | `github.com/T-Auto/dsh-ops` |
+- 排除目录与数据包：`dsh-plugin-catalog`、`dsh-plugin-updates`。
+- 排除不是 Cordis 插件的包：`cc-safety-net` 是给多个 agent CLI 共用的钩子程序。
+- 其中 6 个是上一轮 (2026-11-12) 审计过的，本轮按最新版本重审；另外 20 个是新加的。
 
-方法:只读代码,不安装、不运行。源码克隆到 `D:\dsh-plugins\src`,发布包解压到
-`D:\dsh-plugins\<名字>\package`,两者对照确认入口一致。下文的位置都相对于各插件的源码根目录
-(dsh-pet 为 `dsh-pet/src`,dsh-ops 为 `src`,whale-widget 为发布包)。人工核对过的位置标 ✔。
+**目的**：按汇总定理 (`theories/Summary.v`，笔记的 thm-summary) 的四层保证，逐个判断真实插件落在哪一层、卡在哪条前提上。
 
-检查的五项:
+**方法**：只读发布包，不安装、不运行、不克隆。包解压在 `D:\dsh-plugins\<名字>\<版本>\package`。每个插件的逐条证据在 [plugin-audit/](plugin-audit/) 下，每个插件一个文件，文件中位置都相对于包根，人工核对过的标 ✔。
 
-- (a) 每个服务访问的键 k ∈ d ∪ p(d 为 `inject`,p 为自己 provide 的键);
-- (b) 每个 provide 的键 k ∈ p,且名字静态;
-- (c) 启动程序有界;
-- (d) 所有副作用都登记在 fiber 的 disposer 列表上(恢复精确性的前提);
-- (e) 运行期事件处理器产生的效应以子 fiber 承载(`O-React`)。
+## 四层与检查项
+
+| 层 | 汇总定理给的保证 | 插件侧要检查的前提 |
+|---|---|---|
+| 0 安全 | 良构、提供者比依赖者活得久 (演算本身无假设) | 插件的行为落在模型内：S1 只访问 inject ∪ 自己 provide 的键；S2 provide 的键静态、不冲突；S3 无 `internal/*` 钩子、无猴补丁、不挂到别人的 ctx 上、不自行编排别的插件 |
+| 1 活性 | 生命周期步终止，静止即稳定 | L1 启动程序有界；L2 inject/provide/spawn 无环 |
+| 2 恢复 | 卸载后存储 ≃ 略去它全部操作的影子 | R1 启动期效应都登记在 fiber 上 (含中途抛错)；R2 运行期效应由子 fiber/`ctx.effect` 承载；R3 相遇受控 (登记名不与别的插件撞)；R4 区分应登记的临时资源与有意持久的外部状态 |
+| 3 合流 | 干净终态在重命名意义下与调度无关，并等于静态组装 | C1 完整提供；C2 启动分支不依赖调度 (未注入服务在不在、分发结果、环境探测)；C3 所用服务的逆与状态无关；C4 不直接 dispose 启动时 spawn 的子 fiber；C5 启动期不读有序分发的结果 |
+
+**判定**：✓ 满足；△ 需要标注、小重构或依赖一个约定；✗ 照现写法不满足。
+
+- 一层算"可达"，要求该层与以下各层都没有 ✗。
+- S1 中读未注入的服务一律记 △，前提是把它标成可选依赖，因为模型缺这个机制 (差异 m)，不全是插件的错。
+- S3 有 ✗ 的记为**不在模型内**：这时连第 0 层的保证都不覆盖它。
+- R3 是对整套安装的要求，不是单个插件的性质。表中的 ✗ 指已经找到与某个热门插件实际撞名。
 
 ## 结论
 
-| 插件 | (a) | (b) | (c) | (d) | (e) |
-|---|---|---|---|---|---|
-| dshmarket | ✗ | ✓ | △ | ✗ | ✗ |
-| dsh-windows-mcp | △ | ✓ | ✓ | ✗ | ✗ |
-| dsh-pet | ✗ | △ | ✓ | ✗ | △ |
-| dsh-context | ✗ | ✓ | △ | ✗ | ✓ |
-| dsh-whale-widget | △ | ✓ | ✓ | △ | △ |
-| dsh-ops | ✗ | △ | △ | ✗ | ✗ |
+| 插件 | 版本 | 月下载 (万) | 安全 | 活性 | 恢复 | 合流 | 最高层 |
+|---|---|---|---|---|---|---|---|
+| dshmarket | 1.80.0 | 133 | ✗ | △ | ✗ | ✗ | 不在模型内 (编排者) |
+| dsh-windows-mcp | 0.2.11 | 93 | ✗ | ✓ | ✗ | △ | 不在模型内 |
+| dsh-pet | 0.4.9 | 59 | ✗ | △ | ✗ | ✗ | 宿主 1；客户端不在模型内 |
+| dsh-context | 0.87.1 | 58 | ✗ | ✓ | △ | ✗ | 不在模型内 |
+| dsh-whale-widget | 0.4.2 | 40 | △ | ✓ | ✗ | △ | 1 |
+| dsh-agent-compare | 3.3.0 | 27 | △ | ✓ | △ | △ | 2 |
+| dsh-ops | 0.5.5 | 26 | ✗ | △ | ✗ | ✗ | 不在模型内 |
+| dsh-mobile-plugin | 0.5.97 | 26 | ✗ | △ | ✗ | ✗ | 不在模型内 (编排者) |
+| dsh-remote | 1.3.1 | 24 | ✗ | ✓ | △ | ✗ | 不在模型内 |
+| dsh-cost-meter | 1.9.85 | 18 | ✗ | ✓ | ✗ | ✗ | 不在模型内 |
+| @michengai/dsh-skills-manager | 1.5.0 | 17 | △ | ✓ | ✗ | △ | 1 |
+| dsh-free-search | 0.9.82 | 17 | ✗ | △ | ✗ | ✗ | 不在模型内 (编排者) |
+| dsh-mnemon | 0.5.53 | 16 | ✗ | △ | △ | ✗ | 不在模型内 (编排者) |
+| dsh-plugin-wallpaper-engine | 1.4.3 | 16 | △ | ✓ | △ | ✗ | 2 |
+| dsh-connect-workbuddy | 5.31.0 | 15 | △ | ✓ | ✗ | ✗ | 1 |
+| @xmanrui/dsh-im | 5.10.0 | 14 | △ | ✓ | △ | ✗ | 1 |
+| @michengai/dsh-archive-manager | 1.4.1 | 14 | ✗ | ✓ | ✗ | ✗ | 不在模型内 |
+| dsh-genui | 0.3.4 | 13 | ✓ | ✓ | △ | ✗ | 宿主 2；客户端 ≤ 1 |
+| dsh-session-superagent | 0.10.12 | 10 | ✗ | ✓ | ✗ | ✗ | 不在模型内 |
+| dsh-image-gen | 0.11.4 | 10 | △ | ✓ | ✗ | △ | 1 |
+| ds-harness-remote | 0.6.7 | 10 | ✗ | △ | ✗ | ✗ | 不在模型内 |
+| dsh-prime-memory | 0.26.72 | 10 | ✗ | △ | ✗ | ✗ | 不在模型内 |
+| dsh-token-diet | 0.1.0 | 10 | △ | ✓ | △ | ✗ | 2 |
+| @tencent-connect/dsh-qqbot | 0.5.5 | 10 | ✗ | △ | ✗ | ✗ | 不在模型内 |
+| dsh-onebot-qq | 0.11.0 | 9 | △ | ✓ | △ | △ | 1 |
+| deep-view | 0.1.2 | 9 | △ | ✓ | ✗ | ✗ | 2 (不与旧版 DS Bot 同装时) |
 
-✓ 可语法检查;△ 需要标注或小重构;✗ 照现在的写法在模型之外。
+表中按宿主端打分。有客户端且客户端更差的，在"最高层"一列分开写。各列取该层检查项中最差的一项。
 
-1. **空间部分基本可查。** 4 个插件不提供任何服务,另外 2 个各一个字面量 provide(dsh-pet 的
-   `petApi7340`,dsh-ops 的 `opsSettings`),都没有 `provide` 元数据,p 只能从代码推出。inject 的
-   键全是字面量;启动程序几乎都是同步的,循环只遍历静态数组或有限的配置。
-2. **未声明的 `ctx.get` 普遍存在,而且多数是有意的。** 6 个插件都有(从 dsh-windows-mcp 的少数几处
-   到 dsh-context 的约 30 处)。注释说明了原因:想用某个服务,又不想在缺少它的宿主上停在 PENDING,
-   于是在请求时惰性读取。这是模型缺少**可选依赖**,不只是插件不规范(差异 m)。
-3. **恢复精确性对每个插件都不成立,原因分两类。**
-   - 应登记而未登记的临时资源:路由、计时器、子进程、模块级状态。这类是 bug,可以重构。其中一部分
-     来自 dsh 的 API:`webServer.register` 只返回裸 disposer,不像 `tools.register`、`slots.inject`
-     那样自动挂到调用者的 fiber 上(dsh `packages/host/webserver/src/index.ts:445` ✔)。
-   - 有意持久的外部状态:配置文件、profile、凭据、缓存、日志。它们本来就不该撤销。
-4. **生命周期是两个 fiber 交集的效应很常见,模型没有对应构造。** dsh-ops 在 `agent/created` 中
-   `agent.ctx.plugin(...)`,把子 fiber 挂在别人的上下文上,再用私有 Map 手工回收(5 处,例如
-   `publication/native.ts:112` ✔);dsh-windows-mcp 在每个 agent 的上下文上 `tools.restrict`。
-   这类效应应在"本插件卸载"或"该 agent 销毁"任一发生时撤销;`O-React` 只能把子 fiber 挂在自己下面。
-5. **dshmarket 是编排者。** 它改 loader 条目、热挂载 `Include` 子树、调用 CLI 安装插件后重启进程。
-   这些在模型里是外部编排标签(`O-Insert`、`O-Dispose`),它需要的是编排者的义务,而不是组件义务 C。
+**分布**：
 
-## 各插件要点
+| 最高层 | 个数 | 插件 |
+|---|---|---|
+| 3 | 0 | — |
+| 2 | 5 | agent-compare、wallpaper-engine、genui (宿主)、token-diet、deep-view |
+| 1 | 7 | whale-widget、skills-manager、connect-workbuddy、dsh-im、image-gen、onebot-qq、pet (宿主) |
+| 不在模型内 | 14 | 其余 |
 
-### dshmarket
+下载量最高的 4 个都不在模型内或只到第 1 层。
 
-- 宿主入口 `src/index.ts`:函数插件,没有顶层 `inject`;依赖全部经动态 `ctx.inject` 子 fiber
-  (`['webServer','loader']`,`:290`)。客户端 `inject = ['slots','locale','theme']`。
-- (a) 10 处未注入的 `get`:`profileContext` ×6、`connection` ×2、`agents`、`desktopProfiles`、
-  `pluginManager`。`ctx.get('desktopProfiles')` 一次性决定走官方 Desktop、Web CLI、第三方 Desktop
-  三条分支中的哪一条,之后不再观察(`:295` ✔)。
-- (c) `void mountClientOnlyDeps(...)` 在效应之外异步遍历 profile 中的包(`routes.ts:893`)。
-- (d) 子进程(`dsh … plugin add|remove|install|update`、`npm install -g pnpm`)、约 33 处文件写入
-  (profile 清单、patch 行、日志、快照)、自我 SIGTERM 的重启助手(`restart.ts:513-721`)、一个有意
-  跨重载存活的 `globalThis` 槽(`official-desktop.ts:450`)。
-- (e) HTTP 与 `internal/plugin` 处理器在长寿的 inject 上下文上 `ctx.plugin`(`hot.ts:1003`),并通过
-  `loader.entries()[i].update({disabled})` 改别的条目。
+### 1. 不在模型内的原因可以归成五类
 
-### dsh-windows-mcp
+一个插件常常同时占几类。
 
-- 宿主入口 `lib/index.js:1316`:`{ name, apply }`,没有 `inject`;四个静态 `ctx.inject` 子 fiber。
-- (a) `ctx.get('tools')`、`ctx.get('agents')`、`scope.get('connection')`,以及读别的 fiber 的
-  `agent.ctx.get('tools')`(`:415`)。
-- (d) 6 个 `webServer.register` 的返回值被丢弃(`lib/index.js:1259-1264` ✔):卸载后路由仍在,重载时
-  因重复注册抛错,被 catch 后只打警告。`uv tool install` 子进程只在超时或取消路由时被杀。改写 profile
-  的 `cordis.patch.yml`。
-- (e) 在每个 agent 的上下文上 `tools.restrict({deny})`(`:425`),本插件卸载时没有释放。
+| 越界方式 | 插件 |
+|---|---|
+| 编排别的插件或自己：改 loader 条目、装卸插件、自更新、自我重启 | dshmarket、dsh-mobile-plugin、dsh-free-search、dsh-mnemon、ds-harness-remote、dsh-remote (自热重载)、dsh-ops 客户端 |
+| 猴补丁服务实例或进程全局 | dsh-context (`tools.register`)、dsh-qqbot (`userQuestions.ask`，`uninstall()` 从未被调用 ✔)、dsh-archive-manager (`workspaceRegistry` 及其原型、webServer 内部路由表)、dsh-mobile-plugin (`webServer.register`)、dsh-cost-meter (`ChildProcess.prototype.spawn` ✔、`web` 服务的方法)、dsh-pet 客户端 (`commandUi.candidates`) |
+| `internal/*` 元层钩子 | dshmarket (`internal/plugin` ✔)、dsh-ops (`internal/dispatch`)、dsh-context (`internal/get`)、dsh-prime-memory、dsh-remote、dsh-cost-meter (`internal/service`)、dsh-mnemon (`internal/config`) |
+| 把效应挂到别人的 ctx 上 | dsh-ops (`agent.ctx.plugin`)、dsh-windows-mcp 与 dsh-remote (`tools.restrict`)、dsh-cost-meter 与 dsh-archive-manager (还原效应挂在被补丁插件的 ctx 上) |
+| `globalThis` 上跨实例共享、新实例清理旧实例 | dsh-session-superagent (✔)、ds-harness-remote |
 
-### dsh-pet
+这些写法多数不是绕开 Cordis 的设计，而是越出了本模型的纪律：Cordis 允许 `ctx.get`、裸 disposer、模块级状态，dsh 自己也这样写。差距主要在"Cordis 允许什么"与"Cordis 保证什么"之间。真正绕开设计的是猴补丁、`internal/*` 钩子和 `globalThis` 跨实例这三类。
 
-- 宿主 `host/index.ts`:`inject` 为 6 个必需服务,`apply` 同步;唯一的 provide 是 `petApi7340`
-  (`setup.ts:194`)。客户端另有 inject 列表,与清单的 `dsh.client.inject` 不一致。
-- (a) 宿主 5 个、客户端 5 个未声明的名字,经 `optionalService` → `ctx.get(name, false)`;另有一处把
-  `get` 作为函数传出,名字在运行时决定(`client/baifan.ts:66`)。
-- (c) apply 有界;三个自我重新挂起的 `setTimeout` 轮询、500ms 端口等待重试、helper 崩溃重启循环都是
-  有意无界的,应建模为 Active 期间的反应。
-- (d) `startHelper()` 在任何效应之外启动 Electron helper 子进程(`host/index.ts:182` ✔),只在
-  lifecycle 效应中停止;Electron 下载最长 10 分钟,卸载不能中止;模块级的提供者注册表与缓存跨卸载存活。
-- 拆除:lifecycle 效应内部有注释写明的顺序要求;客户端拆除时向宿主自己的路由发 `DELETE`。
+其中**编排者**占 6 到 7 个，比上一轮的估计多得多。插件市场、自更新、"装配一组子插件"的 bundle 是真实需求。它们需要的是编排者义务，即关于自己发出的 `O-Insert`/`O-Dispose` 的义务，而不是组件义务。
 
-### dsh-context
+### 2. 第 2 层主要卡在两处
 
-- 宿主 `inject ['sessionProjections']`;约 15 个 `watch*Channel` 各开一个静态 `ctx.inject`。
-- (a) 宿主约 17 处、客户端约 13 处未注入的 `get`(`tools`、`llm`、`settings`、`credentials`、
-  `sessionQuery`、`agents` 等)。
-- (d) 替换 `tools` 服务实例上的 `register`,并监听 `internal/get` 观察谁读了 `tools`
-  (`host/attribution.ts:102-151`),恢复已登记,但假设之后没人再包装它;`sweep.ts:37-60` 启动不可取消
-  的异步循环,写持久行。
-- (e) 处理器只改局部 Map 或返回 waterfall 结果,可查。
+- **登记推迟或中途抛错泄漏**：
+  - dsh-whale-widget 先收集路由的 disposer，最后才登记。
+  - dsh-prime-memory 的 Worker/子进程要等 `apply` 末尾的统一 `ctx.effect` 才登记，中间有十余处 `await`。
+  - dsh-archive-manager 第 2、3 条路由注册失败时吞错。
+  - dsh-connect-workbuddy 在 promise 回调里往主 fiber 上挂效应。
 
-### dsh-whale-widget
+  正确写法是"每做一件事立即登记它的逆"，这正是演算的 `L-Step` 压入撤销项的方式。
+- **运行期资源不归任何 fiber**：
+  - dsh-image-gen 的 OAuth 回调服务器。
+  - dsh-skills-manager 在路由处理器里起的 git 子进程。
+  - dsh-windows-mcp 丢弃了 6 个 `webServer.register` 的返回值。
+  - dsh-im、dsh-onebot-qq 的按会话 runtime 和定时器都靠手工簿记。
 
-- 宿主 `lib/index.js:723`:没有 `inject`(注释说明是有意移除);一个静态
-  `root.inject(['webServer','credentials','connection'])`,内部约 30 个路由。客户端是不经 Cordis 的
-  浏览器脚本,经 `tapIndex` 注入。
-- (a) 两处可选读取:`deepseekAccount`、`sessionTitle`。
-- (d) 路由的 disposer 先收集到数组,最后才由一个 `ctx.effect` 登记(`:4919`):注册中途抛错(例如路由
-  重复)会泄漏之前注册的全部路由。模块加载时 `dns.setDefaultResultOrder('ipv4first')`,改变整个进程。
-  `ctx.credentials.set` 改宿主凭据;多处写 `$DSH_HOME/.dshw-*`。
+  这些都应由 `O-React` 式的子 fiber 承载。
 
-### dsh-ops
+### 3. 第 3 层几乎都卡在 C2，根源同样是缺可选依赖
 
-- 宿主 `index.ts`:没有 `inject`、`provide`;`await host.plugin` 依次挂上 runtime-settings(唯一的
-  provide `opsSettings`)、4 个模式、按配置的预设,再条件挂上至多 3 个组件。以 `{config}` 形式挂载时
-  `mount` 重新包装模块,丢掉了它的 `inject`,于是 tui 无保护地 `ctx.get('tuiPanels')`。
-- (a) `agents` 11 处,`fs`、`approval`、`shellEnv`、`ptcRuntime`、`workingDirectory`、`settings`、
-  `sessionProjections` 各若干处未注入;`sandboxPolicy`、`sandbox` 只在兄弟 inject 中注入,却从外层
-  上下文读取。`service()` 包装吞掉错误,缺失的服务读成 `undefined`。
-- (d) 大量模块级状态与引用计数的共享运行时;启动时的清扫 `setTimeout` 不清除;Windows 上原生
-  `child_process.spawn` 改 ACL 并写回执;部分文件清理推迟到下次进程启动。
-- (e) 见结论 4;另有带 `{global: true, prepend: true}` 的 `internal/dispatch` 监听器观察所有分发。
-- 拆除:disposer 多为异步;拆除时读 `tools`;预设拆除恢复默认预设,下一次激活要先
-  `settlePendingRestore`,即拆除与下次启动之间有显式顺序依赖。
+能到第 2 层的 5 个插件，有 4 个的第 3 层卡在 C2：
 
-## 越界的写法是否绕开了 Cordis 与 dsh 的设计
+- dsh-token-diet：用哪种传输，取决于 `connection`、`sessionPersistence` 是否先于本插件激活。
+- dsh-agent-compare：启动期 `recover()` 读写文件系统。
+- dsh-plugin-wallpaper-engine：启动时跨 profile 做文件系统自检。
+- deep-view：撞名时静默不登记。
 
-大多不是。它们越出的是本模型的纪律,而 Cordis 与 dsh 比模型宽松得多。分三层:
+另一个原因是 C3，即状态相关的逆。dsh-genui 写入的提示档位撤销时不恢复，dsh-context 也有同类情形。这正是 `Tiers.v` 中变量存储的情形：可撤销，但不可合流。
 
-1. **按设计使用。**
-   - 嵌套 `ctx.inject`:Cordis 说明它是 `ctx.plugin({ inject, apply })` 的简写(`registry.ts:165-175`),
-     按功能拆出带依赖的子 fiber 正是本意。
-   - 向注册表登记条目(`tools.register`、`slots.inject` 等):dsh 的扩展方式本来如此,插件之间
-     几乎不互相 provide。
-   - 把有顺序要求的拆除放进同一个效应:上游 Cordis 注释中的约定(DESIGN.md 2.1 节,差异 e)。
-2. **允许、宿主自己也这样做,但保证不覆盖。**
-   - 未注入的 `ctx.get`:Cordis 有意提供(`reflect.ts:247`),dsh 非测试代码中有 368 处(差异 m)。
-   - 不挂到 fiber 上的资源:`webServer.register` 是 dsh 自己的 API,只返回裸 disposer。
-   - 模块级状态、`ctx.root` 上的共享状态、Active 期间的后台循环:Cordis 都不禁止。
+C2 的主体是"读未注入的服务，按它在不在决定登记什么"，与 S1 同源。插件作者这样写，是为了不在缺少该服务的宿主上停在 PENDING。模型若有可选依赖，并规定该依赖出现或消失时是否重载，这类插件多数能直接升到第 3 层。
 
-   这一层的问题是:Cordis 的清理与依赖顺序保证只在一套纪律下成立,而这套纪律既没有写成义务,
-   也没有检查。代码允许,保证却不再覆盖。
-3. **确实绕开设计。** 集中在少数几处:
-   - 猴补丁(dsh-context 替换 `tools.register`);
-   - 拦截运行时自身的扩展点(`internal/get`;带 `{global: true, prepend: true}` 的
-     `internal/dispatch`),属于差异 o 的元层;
-   - 把子 fiber 挂到别的插件的上下文上再自行回收(dsh-ops 的 `agent.ctx.plugin(...)`);
-   - 刻意跨重载存活的 `globalThis` 槽、给自己进程发 SIGTERM 的重启(dshmarket)。
+### 4. 相遇受控在真实安装中已被违反
 
-所以差距主要在"Cordis 允许什么"与"Cordis 保证什么"之间。本形式化把隐含的纪律写成显式的义务 C,
-用它衡量,大部分写法越界;按 Cordis 自己的标准,它们多数合法。改进的方向是把纪律表达出来并强制
-执行,而不是归咎于插件:宿主的注册接口自动挂到调用者的 fiber 上、提供可选依赖、用 lint 检查义务 C,
-只为第 3 层的元层操作提供受控的原语。这样"按 Cordis 的方式写"与"满足模型"才是同一件事。
+以下撞名都是在本轮的 26 个插件之间、或与宿主之间实际找到的：
+
+- `dshRemote`：ds-harness-remote (`dist/index.js:113013` ✔) 与 dsh-remote (`lib/main.js:4657` ✔) 都 `ctx.provide`，两边都把冲突错误吞掉只打警告，谁拿到这个键取决于激活顺序。
+- `approval/request` 中间件：dsh-im (`plugin-src/host/modern-harness-api.mjs:295` ✔) 与 dsh-qqbot 都以 `{ global: true, prepend: true }` 注册，谁先处理审批取决于激活顺序。
+- 工具名：
+  - deep-view 的 `show_view` 与旧版 DS Bot 撞名，且吞错。
+  - dsh-onebot-qq 的 `ask_user_question` 与宿主工具撞名。
+  - 通用名容易与同类插件冲突：dsh-prime-memory 的 `memory_*`、dsh-skills-manager 的 `create_skill`、dsh-free-search 的 `weather`/`research`。
+- 其他登记名：dsh-free-search 的搜索 provider id `ddg`，撞名时复用别人的登记；dsh-connect-workbuddy 的 provider id `workbuddy` 不带前缀，dsh-cost-meter 又按这个名字隐式耦合计费。
+
+这对应汇总定理里的 `Covers G`：注册表只在 G 关联不同名字时可撤销。插件侧的"相遇受控"读作**登记名带插件前缀**。冲突应在插入时拒绝 (差异 c 的建议)，而不是吞错后继续运行。
+
+### 5. 与上一轮相比 (6 个插件)
+
+- **dshmarket** 1.73.18 → 1.80.0：
+  - 纠正上一轮：1.73.18 的路由其实已经经 `host.effect` 登记，缺口只在中途抛错和两个模块级 setter。
+  - 补记上一轮漏掉的一处：`net.js` 清掉 undici 的 `globalDispatcher`。
+  - 新增：经 `hmr.reconcileProfile()` 热替换自身；`llm`、`agentDefaultModel`、`hmr` 三个未注入读取；默认开启的匿名遥测心跳；一个新的 `globalThis` 槽。
+- **dsh-windows-mcp** 0.2.8 → 0.2.11：
+  - Computer Use 开关不再写 `state.json`，改为模块级的按会话 Map，跨插件重载存活。
+  - 新增未注入读取 `sessions`。
+  - 路由泄漏仍在 (`lib/index.js:1409-1414`)。
+- **dsh-pet** 0.4.7 → 0.4.9：
+  - 退步：新增 `setCityProvider`，并把 4 个内置语音实现写进模块级注册表，没有 disposer。
+  - 客户端猴补丁 `commandUi.candidates` 在 0.4.7 就已存在，上一轮漏记。
+- **dsh-context** 0.83.1 → 0.87.1：
+  - 仍猴补丁 `tools.register`、监听 `internal/get`。
+  - 新增：启动即自动回填 (可中止)、两条路由、两个可选读取。
+  - 除此之外，路由、投影、提示段、worker、计时器都已挂到 fiber 上。
+- **dsh-whale-widget** 0.4.2：发布包未变。补记它往宿主的 `webserver/index-inject` 表里 push 的一行没有逆。
+- **dsh-ops** 0.5.4 → 0.5.5：
+  - 改进：去掉了 `forceDefaultOpsPtc`，拆除不再恢复默认预设，所以拆除与下次启动之间的顺序依赖 (`settlePendingRestore`) 和状态相关的逆都消失了。
+  - `internal/dispatch` 与 5 处 `agent.ctx.plugin` 仍在。
+
+## 有潜力纳入模型的插件
+
+下面按"要做什么才能进模型"分组，依据是各插件审计文件中的升级路径。
+
+先说明一点：S1/C2 里的大部分"可选依赖"**现在的模型就能表达**。写成静态的 `ctx.inject([...], cb)` 子 fiber，就是一个依赖为 d 的 Spawn。服务不在时，子 fiber 停在 Inactive，target 为 ⊥，状态仍然稳定。只有当父 fiber 自己的行为按"服务在不在"分支时，才需要扩展模型。
+
+### A. 只改插件就能进模型，并可到第 3 层 (8 个)
+
+| 插件 | 现在 | 要改的地方 |
+|---|---|---|
+| deep-view | 2 | 工具名加前缀，去掉 `tools.register` 外的吞错 |
+| dsh-agent-compare | 2 | 未注入读取改为 `ctx.inject` 子 fiber；`recover()` 移进 `ctx.effect` |
+| dsh-plugin-wallpaper-engine | 2 | 跨 profile 的自检移出 `apply`，或只告警不抛错 |
+| dsh-token-diet | 2 | 按服务分出 `ctx.inject` 子 fiber，在各自的子 ctx 上登记 |
+| dsh-genui (宿主) | 2 | 登记一个固定名字的提示段，按当前档位惰性求值 |
+| dsh-session-superagent | 不在模型内 | 去掉 `globalThis` 共享表；每个 watcher 做成子 fiber；路由撞名直接报错 |
+| dsh-remote | 不在模型内 | 自更新只落盘提示；`internal/service` 改为 inject；`dshRemote` 改名；未注入读取改为子 fiber。agent 级 `restrict` 需要 B 类的交集生命期，或标为已知例外 |
+| @michengai/dsh-archive-manager | 不在模型内 | 不再覆盖 `workspaceRegistry`，改为自己 provide 一个服务；路由逐条 `ctx.effect` 登记；去掉吞错分支 |
+
+### B. 只改插件可到第 2 层；第 3 层要么需要模型扩展，要么受限于外部环境 (10 个)
+
+| 插件 | 现在 | 到第 2 层要改的地方 | 第 3 层卡在 |
+|---|---|---|---|
+| dsh-whale-widget | 1 | 路由逐条登记；去掉模块级 `dns` 设置 | 定时器分支依赖配置文件 (外部世界) |
+| dsh-image-gen | 1 | OAuth 回调服务器登记到 fiber；嵌套 inject 挂对 ctx；工具名加前缀 | `installSection` 的逆是否与状态无关，未确认 |
+| dsh-connect-workbuddy | 1 | 登记移进子 fiber，不再在 promise 回调里挂效应；provider id 加前缀 | 目录刷新依赖网络 (外部世界) |
+| dsh-onebot-qq | 1 | 会话 agent 与定时器用 `ctx.effect`；ask 工具改名 | 设置条目改写 loader 条目 (编排者) |
+| @xmanrui/dsh-im | 1 | 每个通道或 bot 做成子 fiber；中间件去掉 `prepend` 或约定唯一拦截者 | 自更新 (编排者)；父 fiber `await` 子 fiber 的结果 |
+| @michengai/dsh-skills-manager | 1 | git 子进程接 fiber 的 AbortSignal | 在每个 agent 的 ctx 上登记 provider (交集生命期) |
+| dsh-pet (宿主) | 1 | 语音和城市 provider 用 `ctx.effect` 登记；Helper 启动移进效应 | Helper 依赖环境与端口时机 (外部世界)。客户端要等宿主提供命令面孔入口，才能去掉猴补丁 |
+| @tencent-connect/dsh-qqbot | 不在模型内 | 删掉 `userQuestions.ask` 补丁，改挂 `user-questions/request` 中间件 (onebot-qq 就是这么做的)；会话 agent 用 `ctx.effect` 承载 | 凭据写入 `cordis.patch.yml` (编排者)；`approval/request` 用了 `prepend` |
+| dsh-prime-memory | 不在模型内 | 删掉 `internal/service`，改为 inject；collector 经服务读取；每建一个资源立即登记其释放 | 数据目录 (外部世界) |
+| dsh-context | 不在模型内 | 去掉对 `tools.register` 的替换和 `internal/get` 监听，需要宿主提供"工具所有者"查询，否则放弃归因功能 | 版本探测分支 (外部世界) |
+
+### C. 必须等模型扩展或宿主提供新原语 (8 个)
+
+| 插件 | 需要的扩展 | 扩展后可达 |
+|---|---|---|
+| dsh-ops | 交集生命期 (`agent.ctx.plugin`)；宿主提供 `tools/change` 事件以替代 `internal/dispatch` | 2 |
+| dsh-windows-mcp | 交集生命期 (对 agent 的 `restrict`)；另需修路由登记 | 2 |
+| dshmarket | 编排者义务：拆出市场浏览组件 (可到 2)，装卸、禁用、HMR 收进编排者模块 | 组件部分 2 |
+| dsh-mnemon | 编排者义务 (bundle、starter)；交集生命期 (per-agent 效应) | 本体 2 |
+| dsh-mobile-plugin | 编排者义务；还需宿主提供路由分发与换代机制，以取代对 `webServer.register` 的猴补丁 | 代 (`impl.js`) 1 到 2 |
+| dsh-free-search | 编排者义务 (改写 `web` 条目、自升级)；provider id 与工具名加前缀 | 2，对固定环境可到 3 |
+| ds-harness-remote | 编排者义务 (禁用旧条目、自更新)；`dshRemote` 改名 | 2 (换服务器要 dispose 子 fiber，违反 C4) |
+| dsh-cost-meter | 计量拆成宿主扩展；宿主提供 `web` 的计费事件，取代方法替换 | 2 |
+
+### 汇总
+
+- 只改插件、不动模型，就有 8 个能到第 3 层，10 个能到第 2 层。
+- 剩下 8 个要等三项扩展：编排者义务、交集生命期、外部持久世界 (对固定环境合流)，有几个还需要宿主新增原语。
+- B 类第 3 层的障碍大多是"外部世界"。这一项若作为"对固定环境合流"写进模型，B 类有一半左右可以再升一层。
+
+真正没有前景的只有各插件中少数几项功能本身：dsh-genui 客户端的自定义元素、dsh-context 的归因、dsh-cost-meter 的子进程计量。它们要么由宿主接管，要么标为"保证不覆盖"。
 
 ## 对形式化的影响
 
-1. **现阶段逐个插件的精化证明证不出东西**:要证的性质对这些插件本身就不成立(路由泄漏、效应之外的
-   子进程、挂在别人 fiber 上无人回收的效应)。检查器的首要用途是找 bug。
-2. **模型要扩充三样东西**,都由真实插件归纳而来:
-   - 可选依赖:有无影响行为,但不阻止激活;要规定它出现或消失时是否触发重载,否则合流取决于时机;
-   - 交集生命周期的效应:挂在另一个 fiber 上,任一方结束即撤销;
-   - 外部持久世界:文件、凭据、配置不属于上下文,恢复精确性只对上下文陈述。
-3. **编排者单独对待**:dshmarket 这类插件的义务是关于它发出的编排标签,而不是组件义务 C。
+1. **汇总定理的分层与实际情况吻合**。
+   - 安全和活性的义务 (有界、有秩) 几乎所有插件都满足：活性一列没有 ✗，只有几处 △ (启动后的轮询应建模为反应)。
+   - 差距集中在恢复与合流，又集中在少数几种可以机械检查的写法上。
+   - 逐个插件的精化证明现在仍然证不出东西；检查器的首要用途是找 bug，并告诉作者差哪一层。
+2. **模型要补的东西**，按影响的插件数排序：
+   - **可选依赖**：同时影响 S1 与 C2，涉及过半插件。必须规定依赖出现或消失时是否重载，否则合流取决于时机。
+   - **编排者义务**：6 到 7 个插件本质上是编排者。
+   - **交集生命期的效应**：挂在另一个 fiber 上，任一方结束即撤销。
+   - **外部持久世界**：配置、凭据、缓存、日志不属于上下文，恢复精确性只对上下文陈述。
+3. **相遇受控应当可以静态检查**：登记名多为字面量，可以从发布包中抽出所有工具名、provider id、provide 键，做跨插件的冲突检查。
 
 ## 对 dsh 与 Cordis 的建议
 
-- `webServer.register` 像 `tools.register` 一样经 `ctx.effect` 挂到调用者的 fiber 上,一处修改消除
-  一类泄漏(dsh-windows-mcp、dsh-whale-widget)。
-- 提供正式的可选依赖,并对读取未注入的服务给出警告(差异 m 的建议,这次有了数据支持)。
-- 给"挂在另一个 fiber 上的效应"一个原语,取代 dsh-ops 等插件的私有 Map 手工回收。
+- 让 `webServer.register` 等登记接口像 `tools.register` 一样自动挂到调用者的 fiber 上，消除"延后登记"和"丢弃 disposer"两类泄漏。
+- 提供正式的可选依赖，并对读取未注入的服务给出警告 (差异 m)。
+- 键冲突、工具名冲突在插入时拒绝；文档约定登记名带插件前缀。
+- 给"挂在另一个 fiber 上的效应"一个原语，取代私有 Map 手工回收；给编排者一组受控原语 (安装、启停、自更新)，取代改 loader 条目、`internal/*` 钩子和自我 SIGTERM。
+- 插件市场上架时跑一遍按层的 lint，把"最高层"作为插件的一个标签展示。

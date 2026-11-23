@@ -1,0 +1,31 @@
+# dsh-ops 0.5.5
+
+- 是否 Cordis 插件 / 入口 / 宿主 inject / provide / 客户端：是。宿主入口 `lib/index.js` (`main`，bundle 只插一行 `dsh-ops`，`cordis.patch.yml`)；根没有 `inject`、没有 `provide`，`async apply(root, rawConfig)` 依次 `await host.plugin(...)` 挂 runtime-settings、5 个模式消费者、按配置的预设、至多 3 个组件 (`lib/index.js:28-79` ✔)。唯一 provide `opsSettings`，在 `root.inject(['typert','subprocess'])` 子 fiber 里 (`lib/settings/runtime-host.js:26-28` ✔)。客户端 `lib/client/index.js` (`exports['./client']` → `lib/client.js`)：`inject=['slots','locale','remote']` (`lib/client/index.js:9`)；清单 `dsh.client.inject` 列的是 5 个包名，`immediately: true`。另有 `bin/dsh-ops.mjs` CLI，不在本次范围。
+- 一句话功能：给 DSH 换上原生文件/搜索/PTC 工具面与 Bash/PowerShell 外壳，隐藏同名官方工具，注册 `ops-ptc` agent 预设，附设置页与诊断卡。
+
+文中路径相对包根 (发布包只有编译后的 `lib/*.js`)。
+
+| 层 | 前提 | 判定 | 证据 |
+|---|---|---|---|
+| 0 | S1 | ✗ | `service()` 包装 `ctx.get` 并吞掉异常，缺失读成 `undefined` (`lib/adapter/dsh/host.js:12-20` ✔)。经它或直接 `get` 读的名字 (全包计数)：`tools` 14、`agents` 11、`sandboxPolicy` 10、`subprocess` 9、`systemPrompt` 6、`sandbox` 5、`jobs` 3、`agentPresets` 3、`ptcRuntime` 2、`settings`、`pluginPackages`、`sessionProjections`、`fs`、`approval`、`shellEnv`、`workingDirectory` 各 1。其中 `tools`/`sandboxPolicy` 等部分在兄弟 inject 中注入，`agents`、`settings` (`lib/presets/ops-ptc/register.js:58` ✔)、`fs`、`approval` 等从未注入。`mount` 在 `state.raw`/`slice` 皆无时重新包装模块，丢掉 `inject` (`lib/index.js:35-36` ✔)；tui 组件声明了 `inject=['tuiPanels']` 并 `ctx.get('tuiPanels')` (`lib/components/tui/index.js:7,13`)，它是否走包装路径取决于 `config.tui.raw`，未确认。客户端：`remote.opsSettings`/`remote.dsh-ops`/`remote.pluginManager` 未注入 (`lib/client/index.js:31-32,48` ✔)。 |
+| 0 | S2 | △ | `opsSettings` 字面量；但 provide 在 inject 子 fiber 里，根无 provide 元数据。`ops-ptc` 预设 id 写进宿主 `agentPresets` 注册表 (`register.js:28`)，不是 provide。 |
+| 0 | S3 | ✗ | `internal/dispatch` 监听器 `{prepend:true, global:true}` (`lib/publication/changes.js:50-62` ✔，差异 o)；把子 fiber 挂到别人的 agent 上下文：`agent.ctx.plugin(...)` 5 处 (`lib/publication/native.js:100` ✔、`publication/ptc.js:164`、`discovery/controller.js:175`、`integration/diagnostics.js:125`、`session-shells.js:290`)，在 `agent/created` 处理器里创建、私有 Map 手工回收；在每个 agent 作用域上 `tools.restrict({deny})` 隐藏官方工具 (`lib/official-tool-hiding.js:136`)。启动时扫描 profile 层 `node_modules`、`createRequire` 解析宿主 `@deepseek-ai/dsh-app-boot` 并用它的 loader 解析补丁片段 (`register.js:16-20,234,305`)，伸进宿主内部。客户端：点击后经 `pluginManager.installBundle('dsh-win-pwsh7')` 安装别的 bundle (`lib/client/detail.js:225` ✔)，这是编排者动作 (用户触发)。 |
+| 1 | L1 | △ | 启动循环只遍历 `MODE_IDS` 与配置里的预设，有界。但 apply 是 `async`，逐个 `await host.plugin`；`ops-ptc` 注册在后台 `void activate(...)` 异步跑 (`register.js:357`)；首个结果生命周期 owner 在启动时排一个模块级 3 秒清扫计时器 (`lib/kernel/result-cache-gc.js:66-79`，`kernel/result-lifecycle.js:181-184`)，不受任何 disposer 清除。 |
+| 1 | L2 | ✓ | 子 fiber 只 inject 宿主服务 (`tools`、`systemPrompt`、`sandboxPolicy`、`subprocess`、`agentPresets`、`typert` 等)；`opsSettings` 只给客户端 remote 用。无环，不等待自己后代提供的服务。tui 若宿主无 `tuiPanels` 会停在 PENDING，是有意的可选功能，不是环。 |
+| 2 | R1 | ✗ | 已登记：`configureResultCacheGc` 的复位 (`lib/index.js:44-45`)、预设注册的释放 (`register.js:348-355` ✔)、runtime actions (`runtime-host.js:30`)。未登记：模块级状态 `beginMergedRow/endMergedRow` (`lib/settings/legacy.js`)、`registered` WeakSet (`register.js:43`)、`companionVersion` 60 秒缓存 (`lib/settings/companion.js:138-155`)、上述启动清扫计时器。客户端启动 `remote.$mount(RUNTIME_REMOTE)` 无 disposer (`lib/client/index.js:20`；是否由宿主自动挂 fiber，未确认)。 |
+| 2 | R2 | ✗ | `agent/created` 处理器 (`publication/native.js:156`、`discovery/controller.js:277`、`session-shells.js:326`) 在别的 fiber 上建子 fiber，生命周期是"本插件卸载"与"该 agent 销毁"的交集，`O-React` 无对应构造。Windows 上 `tools/execute` 处理器里 `await prepareWorkspace` 起子进程改工作区 ACL 并写回执 (`lib/workspace-preparation.js:154-160` ✔，`:136` 超时 kill)。spill 清理 `setInterval` 有 `dispose` (`lib/shells/spill-retention-runtime.js:80-95`)。 |
+| 2 | R3 | ✗ | 刻意与官方工具相遇：按名字隐藏官方 `pwsh`/`bash`/文件工具并以自己的实现替代 (`official-tool-hiding.js`，`OFFICIAL_REPLACEMENTS`)，依赖别的插件登记的条目；`tools/change` 全局 prepend 监听 (`lib/publication/registrar.js:204`)。自有工具名 `ops_*` 带前缀；预设 id `ops-ptc` 可能与他人撞名。 |
+| 2 | R4 | — | 持久状态 (保证不覆盖)：临时目录下的结果缓存与 spill (有保留策略)；Windows 工作区 ACL 改动与备份回执；`selectedDefault: ops-ptc` 只在用户点按钮时经 `settings.update` 写入 profile (`register.js:76-87,99-115` ✔)，卸载不再改回。进程级：未发现改 `process.env`/全局 fetch/`dns`；子进程环境经 `shellEnvOverrides` 派生 (`lib/shells/execution.js:140`)。临时资源泄漏：模块级状态与启动清扫计时器 (见 R1)。 |
+| 3 | C1 | △ | `opsSettings` 在其子 fiber 的唯一路径上 provide，但它是嵌套 inject 子 fiber 的条件 provide (等 `typert`、`subprocess`)，根本身不提供。 |
+| 3 | C2 | ✗ | 启动分支看文件系统：`companionVersion({sweep:false})` 探测 `dsh-win-pwsh7` 是否装在某个根下，决定每个模式的有效配置 (`lib/index.js:58,68` ✔)；`ops-ptc` 定义取决于能否在 profile 层找到宿主 app-boot (`register.js:305-327`)；`process.platform` 决定是否挂 ACL 准备 (`workspace-preparation.js:152`)。客户端启动时 `await pluginManager.listPlugins()` 决定 `pwsh7Installed` (`lib/client/index.js:48-60` ✔)。前两者可算"对固定环境合流"，缓存 60 秒与后台异步注册使结果也依赖时机。 |
+| 3 | C3 | △ | 0.5.5 去掉了启动时强写默认预设、卸载时恢复旧值这一对状态相关的逆 (`register.js:117-131` 注释 ✔，CHANGELOG 0.5.5)。剩余：`configureResultCacheGc(undefined)` 是"设为空"而非恢复旧值；`tools.restrict` 按句柄撤销，与状态无关。 |
+| 3 | C4 | ✓ | 启动时 `host.plugin` 出的子 fiber 未被直接 dispose；运行期直接 dispose 的是挂在 agent 上的 fiber (已计入 S3/R2)。 |
+| 3 | C5 | ✓ | 启动期未发现读取 `emit`/`waterfall`/`bail` 结果。prepend 监听依赖监听器顺序，但属运行期。 |
+
+**最高层**：不在模型内。`internal/dispatch` 元层监听与把子 fiber 挂到别的插件的 agent 上下文都越过了 S3；客户端还会调用插件管理器安装别的 bundle (编排者动作)。
+**升级路径**：(1) 用宿主公开的 `tools/change` 事件替代 `internal/dispatch` 监听，并把 `agents`、`settings`、`fs`、`approval` 等写进对应子 fiber 的 inject (或可选依赖)，可到第 0 层，前提是模型增加"在 agent 作用域上开子 fiber"的构造 (即 agent 与本插件两条生命周期的交集)；否则 5 处 `agent.ctx.plugin` 无法表达。(2) 去掉模块级状态与未清计时器、给 `$mount` 登记逆，第 1、2 层的 L1/R1 可满足；R3 中"隐藏官方工具"是功能本身，第 2 层的相遇受控只能以 △ 标注。第 3 层需要把 companion 探测改为注入的服务或配置项。
+**与上一轮审计的差异** (0.5.4 → 0.5.5)：
+- 改进：`global.forceDefaultOpsPtc` 被一次显式操作取代。apply、重挂载、卸载都不再写或恢复 `selectedDefault`，上一轮记的"预设拆除恢复默认、下次激活先 `settlePendingRestore`"即拆除与下次启动之间的显式顺序依赖已消失 (lib 中已无 `settlePendingRestore`/`pendingRestores`)。C3 中最明显的状态相关逆随之去掉。
+- 新增：runtime-settings 多了 `applyDefaultPreset` 操作，客户端按钮触发一次 `settings.update` (持久，用户动作)。
+- 未变：根无 inject/provide、`opsSettings`、`service()` 吞错的未注入读取、`mount` 丢 inject、`internal/dispatch` 全局 prepend 监听、5 处 `agent.ctx.plugin`、模块级状态、启动清扫计时器、Windows ACL 子进程。
+- 上一轮未提而本轮记录：客户端经 `pluginManager.installBundle` 安装 `dsh-win-pwsh7`；预设定义靠扫描 profile 层并加载宿主 app-boot 的 loader 解析。

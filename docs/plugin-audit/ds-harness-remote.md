@@ -1,0 +1,24 @@
+# ds-harness-remote 0.6.7
+
+- 是否 Cordis 插件 / 入口 / 宿主 inject / provide / 客户端：**是 Cordis 插件**，同一个包里还带一个独立 CLI。`package.json` 的 `main`/`exports["."]` 和 `dsh-plugin.json` 的 `facets.host.entry` 都指向 `dist/index.js`（11 万行 esbuild bundle）。它导出 `apply` 和 `name`，**不导出 `inject`**；另有 `applyTuiHost` 和 `runCli`。`bin/ds-harness-remote.js` 只调用 `runCli()`，是同一份代码的命令行入口，不经过 Cordis。宿主端的依赖都在 `apply` 里用动态 `ctx.inject` 声明：`["settings"]` 和 `["settings","connection","typertGateway"]`（`dist/index.js:112761,112813` ✔）。provide 也是条件的：`dshRemote` 和 `dshRemoteClient`（`dist/index.js:113010-113018` ✔）。客户端是 `dist/client.js`，`inject = [connection, slots, locale, workspaces, sessions]`（`dist/client.js:7620` ✔）。
+- 一句话功能：通过 P2P/WebRTC 加中转服务器（`dsh.r2049.cn`）远程访问 dsh、Codex、Claude Code 等工作区。宿主端起很多子进程（codex/ACP 后端）、对外网络连接和控制 RPC 路由，还会自更新。
+
+| 层 | 前提 | 判定 | 证据 |
+|---|---|---|---|
+| 0 | S1 | ✗ | 主 fiber 什么都没 inject，却同步读 `ctx.get("loader")`（`dist/index.js:113152,113193` ✔）。activate 里还有一批未注入的读取：`webServer`（`112769,112830` ✔）、`subprocess`/`schedule`（`112937-112938` ✔）、`fileViewerHost`、`sessionQuery`/`sessions`/`sessionPersistence`/`workspaceRegistry`、`webApp`、`attachments`、`pluginManager`、`hmr`。`schedule`、`attachments`、`pluginManager` 还会退到 `ctx.root.get(...)`（`112938,113147` ✔）。这些都是有意的可选依赖，带第二参数 `false` 或做了存在检查，可以改成可选 inject。客户端读了未注入的 `ctx.get("uiWorkspace")`（`client.js:7859` ✔）。 |
+| 0 | S2 | ✗ | 名字是字面量，但 **`dshRemote` 与 dsh-remote 1.3.1 冲突**：两者都 `ctx.provide('dshRemote', …)`（本包 `dist/index.js:113013` ✔，dsh-remote `lib/main.js:4657` ✔）。本包把 provide 包在 try/catch 里，冲突时只打警告，结果取决于哪个插件先激活。另外两个键在运行期还会被 `ctx.dshRemote = value` 直接改写（`113012` ✔）。 |
+| 0 | S3 | ✗ | 改 loader 条目：`disableLegacyLoaderEntries` 对旧包名 `@dsh-remote/plugin` 的条目执行 `loader.update(id,{disabled:true})`（`113084,113193-113201` ✔），这一步属于编排者义务。自更新：`pluginManager.updateBundle(本包)`（`112266` ✔）。在 **root 事件总线**上监听 `plugin-manager/update-state`（`112902-112903` ✔，监听只在一次更新期间存在）。模块级在 `globalThis[Symbol.for("ds-harness-remote.hmr-safe-settings-pump")]` 上放了一个永不结束的异步 pump，跨重载存活（`112000-112033` ✔）。客户端在**模块求值时**猴补丁 `window.fetch` 和 `__DSH_FILE_UPLOAD__`（`client.js:7579-7581` ✔），apply 里又猴补丁 `fileUpload` 服务实例的 `post`（`client.js:7786-7797` ✔，有 effect 还原），并用 `window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__` 做全局单例闸（`7782` ✔）。 |
+| 1 | L1 | △ | 启动程序本身没有循环，但 `await ctx.effect(async…)` 里要等 `runtime.start()`（`113085` ✔）。`start()` 会等网络（`readHarnessVersion`、`loadStoredPolicy`）和 codex 子进程启动，codex 有 grace 超时（`111281-111303` ✔），网络调用是否都有超时**未确认**。每日检查更新的 `setInterval` 在启动成功后才开（`112067` ✔），属于 Active 期间的行为。 |
+| 1 | L2 | ✓ | inject 和 provide 没有成环。`dshRemote*` 在 inject 子 fiber 里 provide，本插件自己不依赖这两个键。 |
+| 2 | R1 | △ | 主要资源都挂到了 effect 上：控制路由 `webServer.register` 的裸 disposer 包进了 `registerControlRoute` 的返回值（`103197`、`registerControlRoute` ✔），runtime 和 clientRuntime 的 close 在 `ctx.effect` 的清理函数里（`113085-113122` ✔），工具用 `toolContext.effect(tools.register)`（`111990-111996` ✔）。没登记的有：`disableLegacyLoaderEntries` 对别的条目的修改（不可逆）、globalThis 上的 pump。runtime 内部的子进程是否全部由 `close()` 回收**未确认**。 |
+| 2 | R2 | ✗ | 控制端点 `settings.server.set` 会触发 `replaceServer`，在运行期重建 runtime，并在**启动 fiber 的 ctx 上**重新 provide 或改写 `dshRemote`/`dshRemoteClient`（`113020-113050` ✔）。这些不是子 fiber，没法单独撤销。控制端点里大量写 settings 也是同样情况（`103217-103260` ✔）。 |
+| 2 | R3 | ✗ | `dshRemote` 与 dsh-remote 撞名（见 S2）。工具名 `remote_*`（`remote_list_hosts`、`remote_upload_file` 等，`111865,111896` ✔）比较通用。路由前缀是 `/ds-harness-remote`（`84780` ✔），slot id 带包名前缀，这两项没问题。 |
+| 2 | R4 | △ | 持久状态：身份和凭据目录（`IdentityStore`、`ServerCredentialStore`）、主机日志文件 `HostLogStore`、settings、loader 配置（被禁用的旧条目），以及插件自更新。临时资源泄漏：globalThis 上的 pump。进程级改动：只读 `process.env.DSH_PROFILE`（`113127` ✔），没有写。客户端的 `window.fetch` 在 apply 之前就被换掉；如果因为单例闸提前 return，就没有任何 effect 负责还原。 |
+| 3 | C1 | ✗ | 两个键都是条件 provide：`config.enabled`、存储可用时才 provide `dshRemote`，有 `serverUrl` 且有 `connection` 时才 provide `dshRemoteClient`（`112870-112898,113077-113082` ✔）。 |
+| 3 | C2 | ✗ | 启动分支取决于这些条件：`TypertGatewaySwitch.supportsCarrier()`（`112808` ✔）、未注入服务是否存在（`connection`、`subprocess`、`schedule`、`webApp` 等）、身份目录准备是否成功（文件系统）、网络启动是否成功，以及 loader 里有没有旧条目。这些是真的依赖时机和环境。 |
+| 3 | C3 | ✗ | `settings.configure({auto:false})` 的逆依赖原值（`112764` ✔）。`ctx.dshRemote = value` 是替换式更新。客户端 `service.post` 的还原写法是「仍等于我的才还原」，同样依赖状态。 |
+| 3 | C4 | △ | 没有 dispose spawn 出来的子 fiber。不过它在 Active 后手动调用了启动期登记的 effect 的 disposer（`disposePendingControl`，`112804` ✔），与差异 q 同类。 |
+| 3 | C5 | ✓ | 启动期没有读取 emit/waterfall/bail 的结果。 |
+
+**最高层**：0 层也不满足（不在模型内）。它改其他 loader 条目、调用 pluginManager 自更新、用 globalThis 跨重载保存状态，还和 dsh-remote 抢 `dshRemote` 这个键。
+**升级路径**：(1) 删掉 `disableLegacyLoaderEntries`，或把它移到一个单独的编排者插件里；自更新改为只给 UI 发提示。(2) 把 `loader`、`webServer`、`subprocess`、`schedule` 等声明为可选 inject，pump 不再挂在 globalThis 上。(3) 把 `dshRemote` 改名（例如 `dsHarnessRemote`），或和 dsh-remote 约定一个所有者。做完这三步可以到第 1 层。要到第 2 层，还需要把 `replaceServer` 改成在子 fiber 里 `ctx.plugin` 一个 runtime，换服务器时 dispose 那个子 fiber 再重建；但这本身又违反 C4，所以最多到第 2 层。`dshRemote` 改成无条件 provide（runtime 不可用时提供一个降级对象）可以补上 C1，但 C2 依赖 carrier 和网络，第 3 层到不了。

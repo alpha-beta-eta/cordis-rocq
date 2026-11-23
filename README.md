@@ -10,8 +10,9 @@ of dsh plugins; plugins' business logic is out of scope.
 - [docs/RULES.md](docs/RULES.md): the calculus and its proved properties.
 - [docs/EMIT-AUDIT.md](docs/EMIT-AUDIT.md): how dsh dispatches events, checked
   against the confluence theorem's assumptions.
-- [docs/PLUGIN-AUDIT.md](docs/PLUGIN-AUDIT.md): the six most downloaded third-party
-  dsh plugins, checked against the component obligations, and what the model lacks.
+- [docs/PLUGIN-AUDIT.md](docs/PLUGIN-AUDIT.md): the 26 most downloaded third-party
+  dsh plugins, graded against the four guarantee tiers of the summary theorem, and what
+  the model lacks; per-plugin evidence in [docs/plugin-audit/](docs/plugin-audit/).
 - [docs/OPLIB.md](docs/OPLIB.md): the contribution model, a restricted operation library
   (read a frozen part, put a contribution) that meets the service hypotheses by construction.
 
