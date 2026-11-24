@@ -22,3 +22,5 @@
 
 **最高层**：0 层也不满足（不在模型内）。它改其他 loader 条目、调用 pluginManager 自更新、用 globalThis 跨重载保存状态，还和 dsh-remote 抢 `dshRemote` 这个键。
 **升级路径**：(1) 删掉 `disableLegacyLoaderEntries`，或把它移到一个单独的编排者插件里；自更新改为只给 UI 发提示。(2) 把 `loader`、`webServer`、`subprocess`、`schedule` 等声明为可选 inject，pump 不再挂在 globalThis 上。(3) 把 `dshRemote` 改名（例如 `dsHarnessRemote`），或和 dsh-remote 约定一个所有者。做完这三步可以到第 1 层。要到第 2 层，还需要把 `replaceServer` 改成在子 fiber 里 `ctx.plugin` 一个 runtime，换服务器时 dispose 那个子 fiber 再重建；但这本身又违反 C4，所以最多到第 2 层。`dshRemote` 改成无条件 provide（runtime 不可用时提供一个降级对象）可以补上 C1，但 C2 依赖 carrier 和网络，第 3 层到不了。
+
+**复核 (2026-11-24)**：`pluginManager.updateBundle(self)` (`dist/index.js:112266`) 先装包，再由宿主 `reload()` 即 `hmr.reconcileProfile()` 让 loader 按 profile 补丁重组条目 (deepseek-harness `packages/boot/plugin-manager/src/index.ts:872`、`:1247`)，属经 loader 的编排，在编排者扩展的模型内。

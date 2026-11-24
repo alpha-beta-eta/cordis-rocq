@@ -29,3 +29,5 @@
 - 核对纠正：上一轮说路由处理器"在长寿的 inject 上下文上 `ctx.plugin`"仍成立；但路由本身在 1.73.18 已经收进 `disposers` 并经 `host.effect` 撤销 (旧 `routes.js:2451`)，上一轮 (d) 中"路由不登记"不适用于 dshmarket，缺口只在中途抛错与模块级 setter。
 - 新增 (1.80)：`ctx.inject(['commands'])` 登记 `/find-plugin` 命令 (登记在子 fiber 的 `effect` 中 ✓，名字通用)；未注入读取 `llm`、`agentDefaultModel`、`hmr`；经 `hmr.reconcileProfile()` 的自我热替换 (`self-reload.js`) 及其 `globalThis` 实例槽；默认开启的匿名遥测心跳 (`telemetry.js`，计时器在 disposer 中停止 ✓)；`startup-repair-report.js` 的 `globalThis` 报告表；新增 17 个 lib 文件 (catalogs、discovery-cache、offline、policy、release-*、update-notifications 等)，未逐一审查，只按关键词扫过。
 - `net.js` 的 undici 全局 dispatcher 修补在 1.73.18 已存在 (`net.js:57`)，上一轮未记，本轮补记为进程级全局改动。
+
+**复核 (2026-11-24)**：自更新 `reloadSelf` (`lib/self-reload.js:158-183`) 只请宿主 `hmr.reconcileProfile()` 把条目换成磁盘上的新版本，自己不写文件；宿主随即由 loader 按 profile 补丁停止并重建条目 (deepseek-harness `packages/boot/hmr/src/index.ts:930`)。这部分属经 loader 的编排，在编排者扩展的模型内。`internal/plugin` 钩子、SIGTERM、子进程装卸仍在模型外。

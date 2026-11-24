@@ -259,8 +259,8 @@ Section Seq.
     Qed.
 
     (** Two replays of the same operations that agree on each fiber's
-        order end ≃. *)
-    (** Reordering a replay so that each fiber keeps its order. *)
+        order end ≃: reordering a replay so that each fiber keeps its
+        order. *)
     Lemma replay_shuffle_ex l1 l2 s0 s1 :
       Cross l1 -> (forall λ, flab λ l1 = flab λ l2) ->
       Replay l1 s0 s1 -> exists s2, Replay l2 s0 s2 /\ s1 ≃ s2.

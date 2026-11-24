@@ -168,7 +168,7 @@ Section Termination.
       intros P acc w [= <- <- _]; cbn; split; [lia | rewrite Nat.sub_0_r; apply HK].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ x P w); [|discriminate]; injection H as <-.
       destruct (LB x f P acc w Hx Hl) as [Hlen Hb].
       assert (Keep : forall γ1 (l : Life), fibers γ1 = fibers γ ->
                 (forall P0 acc0 w0, l = Loading Σ P0 acc0 w0 -> False) ->
@@ -269,7 +269,7 @@ Section Termination.
       apply (so_relife γ); auto; intros m [].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ x P w); [|discriminate]; injection H as <-.
       assert (Ha : acc_of (life f) = acc) by (rewrite Hl; reflexivity).
       assert (Keep : forall γ1 (l : Life), fibers γ1 = fibers γ ->
                 (forall m, In (USpawn Σ m) (acc_of l) -> In (USpawn Σ m) acc) ->
@@ -440,7 +440,7 @@ Section Termination.
       apply effects_relife; auto; apply bok_same; reflexivity.
     - (* LStep *)
       destruct (life fn) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P w); [|discriminate]; injection H as <-.
       pose proof (proj1 (pv_fib Σ prog γ PV n fn Hn) P acc w Hl) as Hsub.
       destruct P as [| |k a κ|k s P'|c P'].
       + apply effects_relife; auto; apply bok_same; reflexivity.
@@ -648,7 +648,7 @@ Section Termination.
     | Inactive _ None => match target γ n with Some _ => Bm | None => dflag f end
     | Loading _ _ acc w =>
         if target_is K_eq_dec Σ prog γ n w then 3 * Kb + 10 - length acc
-        else muU γ f acc None (target γ n) + 1
+        else 2 * Kb + 1 + muU γ f [] None (target γ n) + (Kb - length acc)
     | Active _ acc w =>
         if target_is K_eq_dec Σ prog γ n w then 0
         else muU γ f acc None (target γ n) + 1
@@ -719,8 +719,50 @@ Section Termination.
       rewrite (proj2 (target_is_spec K_eq_dec Σ prog _ n w) Ht); cbn; unfold Bm; lia.
     - (* LStep *)
       destruct (life fn) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w) eqn:Hti; [|discriminate]; injection H as <-.
-      destruct (LB n fn P acc w Hn Hl) as [Hlen _].
+      destruct (may_step K_eq_dec Σ prog γ n P w) eqn:Hms; [|discriminate]; injection H as <-.
+      destruct (LB n fn P acc w Hn Hl) as [Hlen HbP].
+      destruct (target_is K_eq_dec Σ prog γ n w) eqn:Hti.
+      2: { (* an iteration landing after the target has turned *)
+      assert (HnD : P <> PDone) by (intros ->; cbn in Hms; congruence).
+      set (T := muU γ fn [] None (target γ n)).
+      assert (Hmu : mu γ n fn = 2 * Kb + 1 + T + (Kb - length acc))
+        by (unfold mu; rewrite Hl, Hti; reflexivity).
+      rewrite Hmu.
+      assert (Goal : forall γ1 (l : Life),
+                target (set_life Σ γ1 n fn l) n = target γ n ->
+                (match l with
+                 | Unloading _ acc' _ (Some _) => acc' = acc
+                 | Loading _ _ acc' w' => length acc' = S (length acc) /\ w' = w /\ length acc < Kb
+                 | _ => False
+                 end) ->
+                mu (set_life Σ γ1 n fn l) n (mkFiber Σ (fcomp fn) (parent fn) (disposed fn) l)
+                < 2 * Kb + 1 + T + (Kb - length acc)).
+      { intros γ1 l Ht' Hshape.
+        unfold mu; cbn [life].
+        destruct l as [z'|P' acc' w'|acc' w'|acc' w' [e|]]; try contradiction.
+        - destruct Hshape as (Hla & -> & Hlt).
+          rewrite (target_is_stable γ _ n w Ht'), Hti, Ht'.
+          unfold T, muU, dflag; cbn [Wt disposed].
+          destruct (target γ n); destruct (disposed fn); unfold Bm; lia.
+        - subst acc'; unfold T, muU, dflag; cbn [Wt disposed].
+          match goal with |- context [Wt ?g acc] => pose proof (Wt_le g acc) end.
+          destruct (target γ n); destruct (disposed fn); unfold Bm; lia. }
+      Ltac fin2 Goal Ht Hrl :=
+        rewrite Hrl; apply Goal; [eapply Ht; apply Hrl | cbn; repeat split; auto].
+      destruct P as [| |k a κ|k s P'|c P'].
+      + contradiction.
+      + cbn [load_step] in Ht |- *; fin2 Goal Ht Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        rewrite (load_step_op K_eq_dec Σ prog γ n fn k a κ acc w) in Ht |- *.
+        destruct (op_binding K_eq_dec Σ prog γ n fn k w) as [b|]; [|fin2 Goal Ht Hrl].
+        destruct (run a (next γ) (bst Σ b)) as [[[s' g] o]|]; fin2 Goal Ht Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        cbn [load_step] in Ht |- *.
+        destruct (kmem K_eq_dec k (provs Σ (prog (fcomp fn)))); [|fin2 Goal Ht Hrl].
+        destruct (binds γ k); fin2 Goal Ht Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        cbn [load_step] in Ht |- *.
+        destruct (conflict K_eq_dec Σ prog γ c); fin2 Goal Ht Hrl. }
       assert (Hmu : mu γ n fn = 3 * Kb + 10 - length acc) by (unfold mu; rewrite Hl, Hti; reflexivity).
       rewrite Hmu.
       assert (Goal : forall γ1 (l : Life),
@@ -761,9 +803,10 @@ Section Termination.
       destruct (target_is K_eq_dec Σ prog γ n w) eqn:Hti; [discriminate|]; injection H as <-.
       rewrite Hrl; specialize (Ht _ (Hrl _ _)).
       unfold mu; cbn [life]; rewrite Hl, Hti, Ht.
-      unfold muU; rewrite (Wt_ext γ _ acc); [unfold dflag; cbn; lia|].
-      intros x Hx; apply childflag_relife; [reflexivity|].
-      apply (own_item_ne γ n fn x I Hn); rewrite Hl; exact Hx.
+      destruct (LB n fn P acc w Hn Hl) as [Hlen _].
+      unfold muU, dflag; cbn [Wt disposed].
+      match goal with |- context [Wt ?g acc] => pose proof (Wt_le g acc) end.
+      destruct (target γ n); destruct (disposed fn); unfold Bm; lia.
     - (* LLeave *)
       destruct (life fn) as [| |acc w|] eqn:Hl; try discriminate.
       destruct (target_is K_eq_dec Σ prog γ n w) eqn:Hti; [discriminate|]; injection H as <-.
@@ -852,9 +895,7 @@ Section Termination.
     destruct (life fm) as [[e|]|P acc w|acc w|acc w z] eqn:Hl.
     - reflexivity.
     - rewrite Ht; reflexivity.
-    - rewrite (target_is_stable γ γ' m w Ht), Ht; unfold muU.
-      rewrite (Wt_ext γ γ' acc); [reflexivity|].
-      intros x Hx; apply Hfl; exact Hx.
+    - rewrite (target_is_stable γ γ' m w Ht), Ht; reflexivity.
     - rewrite (target_is_stable γ γ' m w Ht), Ht; unfold muU.
       rewrite (Wt_ext γ γ' acc); [reflexivity|].
       intros x Hx; apply Hfl; exact Hx.

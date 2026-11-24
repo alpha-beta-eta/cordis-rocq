@@ -300,7 +300,7 @@ Section Recovery.
     - (* LStep *)
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P0 w); [|discriminate]; injection H as <-.
       destruct (PF n f Hn) as [Q1 Q2].
       pose proof (Q1 P0 acc w Hl) as Hsub.
       assert (Hkeep : forall l, (forall P acc' w', l = Loading Σ P acc' w' -> Sub P P0) ->
@@ -494,7 +494,7 @@ Section Recovery.
         | Some f =>
             match life f with
             | Loading _ P _ w =>
-                if target_is K_eq_dec Σ prog γ m w then
+                if may_step K_eq_dec Σ prog γ m P w then
                   match P with
                   | POp k a _ =>
                       match op_binding γ m f k w with
@@ -780,7 +780,7 @@ Section Recovery.
 
   Lemma event_LStep (γ : State) x f P acc w :
     fibers γ x = Some f -> life f = Loading Σ P acc w ->
-    target_is K_eq_dec Σ prog γ x w = true ->
+    may_step K_eq_dec Σ prog γ x P w = true ->
     event γ (LStep x) = event_load γ x f P w.
   Proof. intros Hx Hl Ht; cbn [event]; rewrite Hx, Hl, Ht; reflexivity. Qed.
 
@@ -1134,7 +1134,7 @@ Section Recovery.
       cbn [step] in H.
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w) eqn:Ht; [|discriminate].
+      destruct (may_step K_eq_dec Σ prog γ x P w) eqn:Ht; [|discriminate].
       injection H as <-.
       rewrite (event_LStep γ x f P acc w Hx Hl Ht).
       apply R_load; auto.

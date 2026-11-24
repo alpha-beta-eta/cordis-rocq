@@ -135,9 +135,10 @@ held n acc     := ∃ UProv k pid ∈ acc. ∃ m ≠ n. resolves m pid
 |---|---|---|
 | `L-Begin n` | `θₙ = Inactive None`,`target n = ω ≠ ⊥` | `θₙ := Loading body(cₙ) [] ω` |
 | `L-Divert n` | `θₙ = Loading P acc ω`,`target n ≠ ω` | `θₙ := Unloading acc ω None` |
-| `L-Step n` | `θₙ = Loading P acc ω`,`target n = ω` | 按 `P` 分情况,见下 |
+| `L-Step n` | `θₙ = Loading P acc ω`;`P = Done` 时还要求 `target n = ω` | 按 `P` 分情况,见下 |
 
-`L-Step n` 按 `P` 分情况:
+`L-Step n` 按 `P` 分情况。除 `Done` 外,target 变化之后照样可以走:这是在途迭代的落地(差异 h)。
+target 变化后 `L-Divert` 随时可用,所以落地几步、何时放弃都由调度决定;收尾的 `Done` 只在 target 未变时走。
 
 - `Done`:`θₙ := Active acc ω`。
 - `Fail ξ`:`θₙ := Unloading acc ω (Some ξ)`。
@@ -191,8 +192,12 @@ fiber 解析,`n` 就既不撤销任何一项,也不请子 fiber 退出。依赖�
    这样 `USpawn` 才能等待子 fiber。守卫 `held` 则按 fiber 整体判断(差异 g,同 Cordis):
    早先的版本把守卫只放在 `UProv` 这一项上,提供者会在依赖者离开之前先撤掉 provide
    之后的效应,依赖者卸载时看到的是被拆了一部分的服务。
-3. **差异 h**:不保留论文中"让在途迭代落地"的分支。每个 `L-Step` 都是原子的服务操作;
-   JS 中的 `await` 只出现在步与步之间,也就是可以 divert 的边界上。
+3. **差异 h**:论文 `L-Divert` 的两支(放弃在途迭代、让它落地)都保留,但不合在 `L-Divert` 里:
+   每个 `L-Step` 是原子的服务操作,target 变化后仍可再走(落地),`L-Divert` 随时可以放弃。
+   只有收尾的 `Done` 要求 `target n = ω`,与论文的 `L-Finish` 和 Cordis 的 reload 一致
+   (target 已转向就直接进入 UNLOADING,不变成 ACTIVE)。论文的 inertial 宿主只落地一次迭代;
+   这里允许落地任意多步,覆盖 Cordis 的两种行为:异步迭代器让在途的那一次落地,同步迭代器一口气跑完。
+   见 DESIGN.md 差异 h 与 D6"在途操作"。
 4. **差异 k**(单独撤销某个效应):用 `O-React` 把每次反应编码为子 fiber,不把 `acc` 改为树。
    子 fiber 本身就是一棵子效应树,单独撤销就是 `O-Dispose`。恢复精确性对它直接成立
    (`Runtime.v`: `effect_exact`):效应出现之前到消失之后,每个绑定的状态都 ≃
@@ -237,9 +242,10 @@ fiber 解析,`n` 就既不撤销任何一项,也不请子 fiber 退出。依赖�
      任何一项、也不请子 fiber 退出(`unload_waits`、`unload_blocked`):提供者的全部效应
      比依赖者活得久;
    - 父 fiber 撤销到 `USpawn m` 时,子 fiber `m` 已被移除(`parent_waits_child`)。
-3. **解析一致**(**已证**,同上):每个 `L-Step n` 都在 `target n = ωₙ` 时执行
-   (`step_coherent`);target 变化后,Loading 的 fiber 不能再走一步,而可以中途放弃
-   (`divert_when_changed`),Active 的 fiber 可以离开(`leave_when_changed`);
+3. **解析一致**(**已证**,同上):每个 `L-Step n` 都按承诺视图 ωₙ 执行,不论 target 此后变成什么;
+   收尾的 `Done` 一步还要求 `target n = ωₙ`(`step_coherent`)。target 变化后,Loading 的 fiber
+   可以中途放弃,不能收尾,剩下的迭代仍可落地(`divert_when_changed`),Active 的 fiber 可以离开
+   (`leave_when_changed`);
    反过来,只有 target 变化时才能放弃或离开(`divert_only_when_changed`、
    `leave_only_when_changed`)。
 4. **恢复精确性**(**已证**,`theories/Recovery.v`):选定 fiber `n`,沿执行维护一个
@@ -270,7 +276,9 @@ fiber 解析,`n` 就既不撤销任何一项,也不请子 fiber 退出。依赖�
      - 假设:组件上有一个秩,沿 `Above` 严格递增,且有上界 `Rb`(组件有限时就是一个拓扑序);
        每个组件程序任一路径的步数不超过 `Kb`(`Bounded`,对应论文的 len ≤ K)。
      - 证明:给每个 fiber 一个度量 μ(在 target 不变时它还能走的步数的上界),状态的度量是
-       按秩分层求和得到的向量,每一步生命周期规则都使它按字典序严格下降。关键事实是一个
+       按秩分层求和得到的向量,每一步生命周期规则都使它按字典序严格下降。target 已转向的 Loading fiber
+       记作"放弃后卸载所需的上界加上剩余步数"(`2·Kb + 1 + μ_U([]) + (Kb − |acc|)`),落地一步使剩余步数减一,
+       放弃使它落到卸载的度量之下。关键事实是一个
        fiber 的步骤不影响秩不高于它的其他 fiber(`lstep_effects`、`mu_other`)。
      - 新增两条不变式:Loading 的 fiber 剩余程序受剩余步数预算约束(`LoadBound`);撤销
        spawn 的项指向的子 fiber 的父指针指回持有者(`SpawnOwn`)。

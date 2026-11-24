@@ -1069,7 +1069,7 @@ Section Preservation.
       cbn [step] in H.
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate].
+      destruct (may_step K_eq_dec Σ prog γ n P w); [|discriminate].
       injection H as <-; apply wf_load_step; auto.
     - eapply wf_LDivert; eauto.
     - eapply wf_LLeave; eauto.

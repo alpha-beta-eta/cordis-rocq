@@ -6,11 +6,11 @@
 
     1. Final states: every fiber is Inactive or Active with a complete ideal
        trace ([final_fiber]); a key's pending operations are all its items
-       ([final_perm]).
+       ([final_items]), and replay fiber after fiber ([final_blocks]).
     2. Path determinism: by induction on rank, corresponding Active fibers
        have the same trace ([final_evs]).
-    3. The two pending lists hold the same operations, so
-       [replay_perm_ops] relates their states. *)
+    3. The two pending lists hold the same operations, each fiber's in
+       the same order, so [replay_shuffle_ex] relates their states. *)
 
 From Stdlib Require Import List PeanoNat Bool Lia RelationClasses Permutation Sorted Wf_nat.
 From Cordis Require Import Prelude Service ServiceSeq Calculus Preservation Ordering

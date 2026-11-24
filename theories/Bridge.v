@@ -632,7 +632,7 @@ Section Steps.
   Proof.
     cbn [Calculus.step]; destruct (fibers Σ γ n) as [f|]; [|discriminate].
     destruct (life Σ f) as [|P acc w| |] eqn:Hl; try discriminate.
-    destruct (target_is K_eq_dec Σ prog γ n w); [intros [= <-] | discriminate].
+    destruct (may_step K_eq_dec Σ prog γ n P w); [intros [= <-] | discriminate].
     exists f, P, acc, w; auto.
   Qed.
 

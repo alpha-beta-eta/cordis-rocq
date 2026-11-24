@@ -12,7 +12,8 @@ of dsh plugins; plugins' business logic is out of scope.
   against the confluence theorem's assumptions.
 - [docs/PLUGIN-AUDIT.md](docs/PLUGIN-AUDIT.md): the 26 most downloaded third-party
   dsh plugins, graded against the four guarantee tiers of the summary theorem, and what
-  the model lacks; per-plugin evidence in [docs/plugin-audit/](docs/plugin-audit/).
+  the model lacks, and re-graded under the three formalized extensions; per-plugin evidence in
+  [docs/plugin-audit/](docs/plugin-audit/).
 - [docs/EXTENSIONS.md](docs/EXTENSIONS.md): extensions kept apart from the core (`theories/Ext/`,
   which the core never imports): optional dependencies (formalized: rules, correspondence with the
   core, safety, no deadlock, recovery, termination, confluence with spawn and under orchestration), orchestrator obligations and intersection lifetimes (formalized).

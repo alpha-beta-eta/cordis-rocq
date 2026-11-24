@@ -29,3 +29,5 @@
 - 改进：Computer Use 开关不再持久化到 `dsh-windows-mcp.state.json` (0.2.8 启动时读该文件，`package/lib/index.js:81,1281`)，改为内存中按会话的 `sessionGrants`；少了一处启动期读取外部文件决定行为的分支，也少了一个持久文件。
 - 新增：未注入读取 `ctx.get("sessions")` (`:322`)；模块级 `sessionGrants` Map (有上限 256) 跨插件重载存活；新增 `lib/processes.js`，安装前在路由处理器中起一个有 5 秒超时的 PowerShell 进程扫描。
 - 上一轮的 (a) △ 现在按 S1 记 ✗ (未注入读取从 3 处增到 4 处，再加跨 fiber 读取)。
+
+**复核 (2026-11-24)**：`writeBridgeOverride` (`lib/dependency.js:617-675`) 直接改写 profile 的 `cordis.patch.yml`，即 loader 组合条目所读的补丁文件，返回 `restartRequired`，由下次启动 (或下次 `reconcileProfile`) 执行；算经 loader 的配置编排。它用 `writeFileSync`，绕过了 plugin-manager 的文件锁。

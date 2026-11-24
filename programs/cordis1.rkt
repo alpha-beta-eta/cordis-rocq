@@ -1,5 +1,5 @@
 #lang racket
-;按博客文章 "deepseek harness笔记2" (alpha-beta-eta.github.io/source/dsh2.rkt) 组织的演算.
+;按博客文章 "deepseek harness笔记0" (alpha-beta-eta.github.io/source/dsh0.rkt) 组织的演算.
 ;章节, 记号和名字都跟着文章走:
 ;  服务 Σ 带等价关系 ≃; 程序 Prog(d,p) 由构造保证只碰声明过的键; 状态 ⟨next, F, B⟩;
 ;  fiber ⟨c, π, τ, θ⟩; 绑定 ⟨ι, q, s⟩; 视图 ω 是 K ⇀ N 的有限映射;
@@ -27,7 +27,7 @@
     [(list s* g _) (≃ Σ (g s*) s)]
     [#f #t]))
 
-;例1 注册表: 名字 -> 值, 逐点比较
+;例: 注册表 (笔记0第1章): 名字 -> 值, 逐点比较
 (struct Register (x v) #:transparent)
 (struct Lookup (x) #:transparent)
 (define Registry
@@ -40,7 +40,7 @@
              (list (hash-set s x v) (λ (s*) (hash-remove s* x)) #f))]
        [(Lookup x) (list s id (hash-ref s x #f))]))))
 
-;例2 有序事件总线: (令牌 . 回调) 的列表, 用相等比较 (分发看得到顺序)
+;例: 有序事件总线 (笔记0第1章): (令牌 . 回调) 的列表, 用相等比较 (分发看得到顺序)
 (struct On (c) #:transparent)
 (struct Emit () #:transparent)
 (struct OnByCallback (c) #:transparent)   ;Cordis 的旧做法: 逆按回调删
@@ -64,7 +64,7 @@
              (list (append s (list (cons t c))) (remove-first c) '()))]
        [(Emit) (list s id (map cdr s))]))))
 
-;例2末尾 监听器注册: 回调的列表, 按多重集比较; 逆删去第一个 c, 不需要令牌
+;上例末尾 监听器注册: 回调的列表, 按多重集比较; 逆删去第一个 c, 不需要令牌
 (struct Listen (c) #:transparent)
 (define (multiset=? l1 l2)
   (equal? (sort (map ~s l1) string<?) (sort (map ~s l2) string<?)))
@@ -311,12 +311,13 @@
             [(Loading _ acc ω)
              (and (not (equal? (target prog γ n) ω)) (θ← γ n (Unloading acc ω #f)))]
             [_ #f]))]
-    ;θ_n = Loading P acc ω 且 target(n) = ω: 按 P 分情况
+    ;θ_n = Loading P acc ω: 按 P 分情况. 只有收尾的 Done 要求 target(n) = ω;
+    ;其余各步在 target 变化后照样可走, 即在途迭代的落地
     [(L-Step n)
      (and (exists? n)
           (match (θ n)
             [(Loading P acc ω)
-             (and (equal? (target prog γ n) ω) (load-step Σ prog γ n P acc ω))]
+             (and (or (not (Done? P)) (equal? (target prog γ n) ω)) (load-step Σ prog γ n P acc ω))]
             [_ #f]))]
     ;;; 卸载
     ;θ_n = Active acc ω 且 target(n) ≠ ω: θ_n ← Unloading acc ω ⊥
@@ -484,7 +485,7 @@
   (check! (= (length ιs) (length (remove-duplicates ιs))) "编号1: ~a" ιs)
   (reverse bad))
 
-;;; 6.2 恢复精确性: 存储, 待撤销操作, 影子存储
+;;; 6.3 恢复精确性: 存储, 待撤销操作, 影子存储
 
 ;store(γ): k ↦ 当前绑定的服务状态
 (define (store γ)
@@ -543,7 +544,7 @@
               #:when bad)
     (cons n bad)))
 
-;;; 6.3 进展: settled(γ)
+;;; 6.4 进展: settled(γ)
 (define (settled? prog γ)
   (for/and ([(n f) (state-F γ)])
     (match f
@@ -552,7 +553,7 @@
       [(fiber _ _ _ (Active _ ω)) (equal? (target prog γ n) ω)]            ;该运行且视图正确
       [_ #f])))
 
-;;; 6.4 合流: 规范名
+;;; 6.5 合流: 规范名
 ;根fiber按插入次序 (即名字的次序) 编号; 子fiber由父fiber的规范名和它在父fiber的 spawn 中的位置命名
 (define (canonical γ)
   (define roots (sort (for/list ([(n f) (state-F γ)] #:when (eq? (fiber-π f) 'root)) n) <))

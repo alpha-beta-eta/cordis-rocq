@@ -1,5 +1,6 @@
 #lang racket
 ;对应 cordis-rocq 的 theories/Calculus.v (规则见 docs/RULES.md)
+;三项扩展 (可选依赖, 编排者, 交集生命期) 见 cordis3.rkt, 它复制了本文件的核心部分
 (struct op-result (state undo value))
 
 ;program ir
@@ -239,7 +240,7 @@
      (define child (instance-ref m child-id))
      (cond [(not child)
             (set-instance-undo-stack! i rest)
-            (format "子实例 ~a 已移除" child-id)]
+            (format "子实例 ~a 已被移除, 弹出它的spawn项" child-id)]
            [(not (instance-disposed? child))
             (set-instance-disposed?! child #t)
             (format "要求子实例 ~a (插件 ~a) 退出"
@@ -271,6 +272,8 @@
             (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a"
                     id name (hash->list wanted))]
            [else #f])]
+    ;视图变化时总是立即放弃 (L-Divert/L-Leave). 演算也允许先让剩余的迭代落地 (差异 h),
+    ;这里取的是其中一种调度
     [(or 'loading 'active)
      #:when (not (equal? wanted (instance-view i)))
      (set-instance-phase! i 'unloading)
@@ -296,10 +299,6 @@
         (hash-set state name value)
         (λ (state) (hash-remove state name))
         'ok)))
-(define ((lookup name) tok state)
-  (op-result
-   state (λ (state) state)
-   (hash-ref state name #f)))
 ;事件总线: 状态是 令牌 -> (事件名 . 处理器) 的hash
 ;同一个处理器可以登记多次, 令牌区分各次登记, 逆只删掉自己这一次
 (define ((on event handler) tok state)
@@ -330,13 +329,14 @@
   (unless (and (eq? (instance-phase i) 'inactive) (instance-failure i))
     (error 'reset! "实例 ~a 不是加载失败后的inactive实例" id))
   (set-instance-failure! i #f))
-;O-Restart: 强制卸载, 卸载完后由L-Begin重新加载
+;O-Restart: 强制卸载, 卸载完后由L-Begin重新加载; 返回一行描述
 (define (restart! m id)
   (define i (existing-instance 'restart! m id))
   (unless (and (not (instance-disposed? i))
                (memq (instance-phase i) '(loading active)))
     (error 'restart! "实例 ~a 不在loading或active, 或已弃置" id))
-  (set-instance-phase! i 'unloading))
+  (set-instance-phase! i 'unloading)
+  (format "实例 ~a (插件 ~a) 开始卸载, 原因: 被要求重启" id (instance-name i)))
 ;O-React: 实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
 ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
 (define (react! m id index)
@@ -504,7 +504,7 @@
   (scene "移除 toolkit: 按 LIFO 拆除, 先 sed-tool, 再撤 help, 再 grep-tool"
          (λ () (dispose! m toolkit-id)))
   (scene "restart core: 依赖者先卸载, core 重新提供 tools (换了编号), 依赖者再加载"
-         (λ () (restart! m core-id)))
+         (λ () (print-step core-id (restart! m core-id))))
   (scene "装 bus 和 watcher"
          (λ () (install! m bus)
                (set! watcher-id (install! m watcher))))
@@ -537,7 +537,7 @@
 
   ;; restart: 结果不变, 但 tools 换了编号
   (define old-pid (provision-id (provision-ref m 'tools)))
-  (restart! m core-id)
+  (void (restart! m core-id))
   (void (settle! m))
   (check-equal? (tools-of m) '("cat" "git" "ls"))
   (check-not-equal? (provision-id (provision-ref m 'tools)) old-pid)

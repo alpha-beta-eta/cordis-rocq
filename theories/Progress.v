@@ -249,7 +249,7 @@ Section Progress.
       apply Same; auto; intros m [].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ x P w); [|discriminate]; injection H as <-.
       assert (Ha : acc_of (life f) = acc) by (rewrite Hl; reflexivity).
       pose proof (proj1 (pv_fib Σ prog γ PV x f Hx) P acc w Hl) as Hsub.
       destruct P as [| |k a κ|k s P'|c P'].
@@ -421,7 +421,8 @@ Section Progress.
       pose proof (QU m (LStep m) ltac:(cbn; tauto)) as E1.
       pose proof (QU m (LDivert m) ltac:(cbn; tauto)) as E2.
       cbn [step] in E1, E2; rewrite Hm, Hl in E1, E2.
-      destruct (target_is K_eq_dec Σ prog γ m w); discriminate. }
+      destruct P; cbn [may_step] in E1; try discriminate;
+        destruct (target_is K_eq_dec Σ prog γ m w); discriminate. }
     assert (NoLeave : forall m fm acc w, fibers γ m = Some fm ->
               life fm = Active Σ acc w -> target γ m <> Some w -> False).
     { intros m fm acc w Hm Hl Ht.

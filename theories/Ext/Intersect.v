@@ -151,14 +151,14 @@ Section Intersect.
 
   (** ** Containment: an effect lives inside its parent and its providers *)
   Theorem effect_within (γ : State) x fx :
-    WF γ -> fibers γ x = Some fx -> is_installed (life fx) = true ->
+    WF γ -> fibers γ x = Some fx ->
     (forall q, fparent fx = Some q ->
        exists fq, fibers γ q = Some fq /\ is_installed (life fq) = true) /\
     (forall k p, In (k, p) (view_of (life fx)) ->
        exists b fo, binds γ k = Some b /\ pid Σ b = p /\ owner b <> x /\
                     fibers γ (owner b) = Some fo /\ is_installed (life fo) = true).
   Proof.
-    intros W Hx _; split.
+    intros W Hx; split.
     - intros q Hq; destruct (wf_parent K_eq_dec Σ progN γ W x fx q Hx Hq) as (fq & Hfq & Iq & _).
       exists fq; auto.
     - intros k p Hin; exact (provider_outlives K_eq_dec Σ progN γ x fx k p W Hx Hin).

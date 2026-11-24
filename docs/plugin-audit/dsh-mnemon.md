@@ -22,3 +22,5 @@
 
 **最高层**：不在模型内。`internal/config` 钩子越过模型边界；而且它本质上是编排者 (bundle 组改 loader 树、替换包解析、启停/安装自家子插件)，需要的是编排者义务。单看本体的登记纪律很好 (R1 ✓，可选依赖多用 `ctx.inject`)。
 **升级路径**：(1) 去掉 `internal/config` 钩子，把配置校验交给 settings 服务的 `validate` (已有 `hostSettings.register(..., { validate })`)；(2) 把 bundle/starter/插件管理与安装拆成单独的编排者插件，本体只做组件；(3) 未注入的 `loader`/`profileContext`/`credentials`/`workspaceRegistry` 等改成 `ctx.inject` 子 fiber 或显式可选依赖。做完 (1)-(3) 本体可到第 1 层；per-agent 效应改由模型的"交集生命周期"构造承载、启动期迁移挪到运行期后可到第 2 层；第 3 层受设置迁移等状态相关逆所限。
+
+**复核 (2026-11-24)**：`owner.entry.parent.unlink(sibling)` (`lib/bundle.js:57`) 用的 `EntryGroup.unlink` 只从父组的配置数组删掉这一项，不 dispose fiber (deepseek-harness `vendor/loader/src/config/group.ts:31`)；mnemon 只对 `disabled: true` 的重复策略行这样做 (`bundle.js:15-24`)，把它们移进自己的组。这是配置层面的条目移动，不涉及运行中的 fiber。

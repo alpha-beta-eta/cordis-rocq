@@ -157,6 +157,16 @@ Section Calculus.
     | None => false
     end.
 
+  (** [L-Step] needs the target to agree with the committed view only to
+      finish: an iteration in flight may land after the target has turned
+      (the paper's inertial host, §4.4; Cordis lands the [await]ed
+      iteration and runs a synchronous iterator to its end). *)
+  Definition may_step (γ : State) (n : nat) (P : Prog) (w : View) : bool :=
+    match P with
+    | PDone => target_is γ n w
+    | _ => true
+    end.
+
   Definition resolves (γ : State) (m p : nat) : bool :=
     match fibers γ m with
     | Some f =>
@@ -344,7 +354,7 @@ Section Calculus.
         | Some f =>
             match life f with
             | Loading P acc w =>
-                if target_is γ n w then Some (load_step γ n f P acc w) else None
+                if may_step γ n P w then Some (load_step γ n f P acc w) else None
             | _ => None
             end
         | None => None

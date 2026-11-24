@@ -83,10 +83,6 @@
   (match l
     [(or (Loading _ _ w) (Active _ w) (Unloading _ w _)) w]
     [(Inactive _) '()]))
-(define (acc-of l)
-  (match l
-    [(or (Loading _ acc _) (Active acc _) (Unloading acc _ _)) acc]
-    [(Inactive _) '()]))
 
 (define (lookup-view k w)
   (match w
@@ -296,7 +292,8 @@
        [(? fiber? f)
         (match (fiber-life f)
           [(Loading P acc w)
-           (if (target-is prog γ n w) (load-step Σ prog γ n f P acc w) #f)]
+           ;may_step: 只有收尾的 PDone 要求 target 未变, 其余步可以落地
+           (if (or (not (PDone? P)) (target-is prog γ n w)) (load-step Σ prog γ n f P acc w) #f)]
           [_ #f])]
        [#f #f])]
     [(LDivert n)

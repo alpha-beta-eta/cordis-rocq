@@ -168,7 +168,7 @@ Section ISummary.
   Proof.
     intros R; pose proof (iwf_reachable K_eq_dec Σ iprog γ R) as W.
     split; [exact W|]; split.
-    - intros x fx Hx Hi; exact (effect_within K_eq_dec Σ iprog γ x fx W Hx Hi).
+    - intros x fx Hx Hi; exact (effect_within K_eq_dec Σ iprog γ x fx W Hx).
     - intros n f acc w z k p m fm k' Hn Hl Hu Hmn Hm Hv.
       exact (unload_blocked_i K_eq_dec Σ iprog γ n f acc w z k p m fm k' W Hn Hl Hu Hmn Hm Hv).
   Qed.

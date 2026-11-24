@@ -14,7 +14,7 @@
 
 - 扩展放在 `theories/Ext/`,逻辑名 `Cordis.Ext.*`,列在 `_CoqProject` 末尾,由 `build.sh` 一并编译。
 - 依赖是单向的:扩展 import 核心,核心不 import 扩展。可以用 `grep -rn "Cordis.Ext\|Ext\.Optional" theories/*.v theories/Services theories/Examples` 检查,结果应为空。
-- 核心文件 (`theories/*.v`,包括 `Summary.v` 的四层汇总定理)、[DESIGN.md](DESIGN.md)、[RULES.md](RULES.md) 和博客笔记 `dsh2.rkt` 都不因扩展而改动。
+- 核心文件 (`theories/*.v`,包括 `Summary.v` 的四层汇总定理)、[DESIGN.md](DESIGN.md)、[RULES.md](RULES.md) 和博客笔记 `dsh0.rkt` 都不因扩展而改动。
 
 **方法:归约到核心。** 能归约的地方,扩展的一步定义为"在为该状态选定的组件表下走一步核心 `step`",外加少量不碰服务状态、不碰累加器的簿记步。
 
@@ -86,7 +86,7 @@ reacts(c,S) = [(c', []) | c' ← xreacts c]
 | 标签 | 规则 |
 |---|---|
 | `X-Begin n` | `θₙ = Inactive None`:先把 n 的组件换成 (c, present γ c) (`recomp`),再走核心 `L-Begin` |
-| `X-Step n` | 在场集未变 (`fresh`) 时走核心 `L-Step`,否则不能走 |
+| `X-Step n` | 在场集未变 (`fresh`) 时走核心 `L-Step`,否则不能走。核心 `L-Step` 在 target 变化后仍可落地 (DESIGN.md 差异 h);在场集变化之后的落地不在扩展之内 |
 | `X-Divert n` | 在场集未变时走核心 `L-Divert`;变了时,`Loading _ acc ω` 直接进入 `Unloading acc ω None` |
 | `X-Leave n` | 同上,对 `Active acc ω` |
 | 其他标签 | 核心规则;`O-Insert c` 插入 (c, []) |
@@ -367,6 +367,13 @@ agent id 是运行时数据,而 `reacts : list C` 是静态列表,不能为每�
 
 义务:`rank_ok` (秩沿处理器实例递增)、`bounded`。
 
+**可运行的原型** (`programs/cordis3.rkt`)。复制 `cordis.rkt` 的核心部分,加上三项扩展:
+- 可选依赖:在场的可选依赖进入视图,已有的"视图不符就卸载"规则因此在在场集变化时重载;程序可以是"在场集到程序"的函数。
+- 编排者:不加规则,测试中演示按任意顺序安装、自更新。
+- 交集生命期:`react!` 带载荷,运行处理器族的实例。
+
+它与 `cordis.rkt` 互不依赖,核心改动时两边都要改。测试覆盖上面两个例子,以及各种调度顺序下结果一致。博客笔记 dsh1 讲解它。
+
 ### 4.2 谁能改变一个值 (`Ext/ExtOrdering.v`)
 
 核心的 `Ordering.decl_step`、`value_moves` (论文定理 70(3) 后半) 对两项改变了步骤关系的扩展照样成立:
@@ -423,3 +430,4 @@ agent id 是运行时数据,而 `reacts : list C` 是静态列表,不能为每�
 | E3 | 带参数的反应与交集生命期 | 已完成 (`Ext/Intersect.v`、`Ext/IntersectLive.v`) |
 | E3′ | 例子 (`Ext/Examples.v`);`Decl`/`value_moves` 在扩展执行上 (`Ext/ExtOrdering.v`) | 已完成 |
 | E4 | 扩展版汇总定理 (`Ext/ExtSummary.v`):在核心汇总定理之上加入三项扩展的义务 | 已完成 |
+| E5 | 按扩展给 26 个插件重新分层 ([PLUGIN-AUDIT.md](PLUGIN-AUDIT.md) "按已形式化的扩展重新分层") | 已完成 |

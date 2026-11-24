@@ -186,7 +186,7 @@ Section Ordering.
       rewrite Hl; cbn; discriminate.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P w); [|discriminate]; injection H as <-.
       destruct (load_step_shape γ n f P acc w W Hn Hl) as (γ1 & l & E & [Hk _] & Hv & Ht).
       rewrite E in Hm'.
       apply (set_life_Same γ γ1 n f l m fm fm' Hn Hk); [rewrite Hl; edge | | exact Hm | exact Hm'].
@@ -278,7 +278,7 @@ Section Ordering.
       eapply Lift0; eauto.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P w); [|discriminate]; injection H as <-.
       destruct (load_step_shape γ n f P acc w W Hn Hl) as (γ1 & l & E & Hk & _).
       rewrite E in Hm'; eapply Lift; eauto.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
@@ -450,30 +450,37 @@ Section Ordering.
     - intros [= ->]; destruct (view_eq_dec K_eq_dec w w); [reflexivity | contradiction].
   Qed.
 
-  (** Every step of a transition runs against the committed view. *)
+  (** Every step of a transition runs against the committed view [w],
+      whatever the target has become since; only the finishing step needs
+      the target to agree with it. An iteration may thus land after the
+      target has turned (the paper's inertial host, §4.4). *)
   Theorem step_coherent (γ γ' : State) n :
     step γ (LStep n) = Some γ' ->
     exists f P acc w, fibers γ n = Some f /\ life f = Loading Σ P acc w /\
-                      target γ n = Some w.
+                      γ' = load_step K_eq_dec Σ prog γ n f P acc w /\
+                      (P = PDone -> target γ n = Some w).
   Proof.
     intros H; cbn [step] in H.
     destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
     destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-    destruct (target_is K_eq_dec Σ prog γ n w) eqn:Ht; [|discriminate].
-    exists f, P, acc, w; repeat split; auto; apply target_is_spec; exact Ht.
+    destruct (may_step K_eq_dec Σ prog γ n P w) eqn:Ht; [|discriminate].
+    injection H as <-.
+    exists f, P, acc, w; repeat split; auto.
+    intros ->; apply target_is_spec; exact Ht.
   Qed.
 
   (** Once the target differs from the committed view, a Loading fiber
-      cannot step and can divert ... *)
+      can divert, and cannot finish (it may still land the iterations it
+      has left) ... *)
   Theorem divert_when_changed (γ : State) n f P acc w :
     fibers γ n = Some f -> life f = Loading Σ P acc w -> target γ n <> Some w ->
-    step γ (LStep n) = None /\ exists γ', step γ (LDivert n) = Some γ'.
+    (P = PDone -> step γ (LStep n) = None) /\ exists γ', step γ (LDivert n) = Some γ'.
   Proof.
     intros Hn Hl Ht.
     assert (E : target_is K_eq_dec Σ prog γ n w = false).
     { destruct (target_is _ _ _ _ _ _) eqn:E; [|reflexivity].
       exfalso; apply Ht, target_is_spec, E. }
-    cbn [step]; rewrite Hn, Hl, E; split; [reflexivity | eexists; reflexivity].
+    cbn [step]; rewrite Hn, Hl, E; split; [intros ->; cbn; rewrite E; reflexivity | eexists; reflexivity].
   Qed.
 
   (** ... and an Active fiber can leave. *)
@@ -625,7 +632,7 @@ Section Ordering.
     - (* LStep *)
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P0 w); [|discriminate]; injection H as <-.
       assert (Keep : forall γ1 (l : Life),
                 (forall m fm, fibers γ1 m = Some fm ->
                    fibers γ m = Some fm \/ exists z, life fm = Inactive Σ z) ->
@@ -746,7 +753,7 @@ Section Ordering.
     - (* LStep *)
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ n P0 w); [|discriminate]; injection H as <-.
       destruct P0 as [| |k0 a κ|k0 s P'|c P']; cbn [load_step] in Hb' |- *.
       + apply Keep; exact Hb'.
       + apply Keep; exact Hb'.

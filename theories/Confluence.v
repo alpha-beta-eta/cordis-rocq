@@ -1,4 +1,4 @@
-(** * Confluence (R3, fifth part): the control state
+(** * Confluence, control layer: the control state
 
     Counterpart of the paper's Theorem 80, first layer: for components that
     spawn nothing, the control state a system settles at does not depend on
@@ -169,7 +169,7 @@ Section Confluence.
       intros k Hk; right; apply Total; exact Hk.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ x P w); [|discriminate]; injection H as <-.
       pose proof (PI x f Hx) as Pf; unfold PIF in Pf; rewrite Hl in Pf.
       assert (Same : forall γ1 (l : Life), fibers γ1 = fibers γ ->
                 PIF (mkFiber Σ (fcomp f) (parent f) (disposed f) l) ->
@@ -280,7 +280,7 @@ Section Confluence.
       apply (ns_relife γ γ); [exact NS | intros; left; assumption | intros m []].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is K_eq_dec Σ prog γ x w); [|discriminate]; injection H as <-.
+      destruct (may_step K_eq_dec Σ prog γ x P w); [|discriminate]; injection H as <-.
       pose proof (NS x f) as Nf; rewrite Hl in Nf; cbn in Nf.
       pose proof (proj1 (pv_fib Σ prog γ PV x f Hx) P acc w Hl) as Hsub.
       assert (Same : forall γ1 (l : Life), fibers γ1 = fibers γ ->

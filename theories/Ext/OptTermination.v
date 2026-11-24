@@ -269,7 +269,7 @@ Section OptTermination.
     | Inactive _ None => match bt γ n with Some _ => Bm | None => dflag f end
     | Loading _ _ acc w =>
         if xtis γ n f w then 3 * Kb + 10 - length acc
-        else muU γ f acc None (bt γ n) + 1
+        else 2 * Kb + 1 + muU γ f [] None (bt γ n) + (Kb - length acc)
     | Active _ acc w =>
         if xtis γ n f w then 0
         else muU γ f acc None (bt γ n) + 1
@@ -312,9 +312,7 @@ Section OptTermination.
     destruct (life fm) as [[e|]|P acc w|acc w|acc w z] eqn:Hl.
     - reflexivity.
     - rewrite Hb; reflexivity.
-    - rewrite Hf; unfold target_is; rewrite Ht, Hb; unfold Termination.muU.
-      rewrite (Wt_ext Σ γ γ' acc); [reflexivity|].
-      intros x Hx; apply Hfl; exact Hx.
+    - rewrite Hf; unfold target_is; rewrite Ht, Hb; reflexivity.
     - rewrite Hf; unfold target_is; rewrite Ht, Hb; unfold Termination.muU.
       rewrite (Wt_ext Σ γ γ' acc); [reflexivity|].
       intros x Hx; apply Hfl; exact Hx.
@@ -364,8 +362,53 @@ Section OptTermination.
     - (* LStep *)
       pose proof (Hfr (or_intror eq_refl)) as F.
       destruct (life fn) as [|P acc w| |] eqn:Hl; try discriminate.
-      destruct (target_is γ n w) eqn:Hti; [|discriminate]; injection H as <-.
-      destruct (LB n fn P acc w Hn Hl) as [Hlen _].
+      destruct (may_step K_eq_dec Σ prog' γ n P w) eqn:Hms; [|discriminate]; injection H as <-.
+      destruct (LB n fn P acc w Hn Hl) as [Hlen HbP].
+      destruct (target_is γ n w) eqn:Hti.
+      2: { (* an iteration landing after the target has turned *)
+      assert (HnD : P <> PDone) by (intros ->; cbn in Hms; congruence).
+      set (T := muU γ fn [] None (bt γ n)).
+      assert (Hmu : xmu γ n fn = 2 * Kb + 1 + T + (Kb - length acc))
+        by (unfold xmu, xtis; rewrite Hl, F, Hti; reflexivity).
+      rewrite Hmu.
+      assert (Goal : forall γ1 (l : Life),
+                (target (set_life Σ γ1 n fn l) n = target γ n /\
+                 bt (set_life Σ γ1 n fn l) n = bt γ n /\
+                 fresh (set_life Σ γ1 n fn l) (mkFiber Σ (fcomp fn) (fparent fn) (disposed fn) l) = fresh γ fn) ->
+                (match l with
+                 | Unloading _ acc' _ (Some _) => acc' = acc
+                 | Loading _ _ acc' w' => length acc' = S (length acc) /\ w' = w /\ length acc < Kb
+                 | _ => False
+                 end) ->
+                xmu (set_life Σ γ1 n fn l) n (mkFiber Σ (fcomp fn) (fparent fn) (disposed fn) l)
+                < 2 * Kb + 1 + T + (Kb - length acc)).
+      { intros γ1 l (Ht' & Hb' & Hf') Hshape.
+        unfold xmu, xtis; cbn [life].
+        destruct l as [z'|P' acc' w'|acc' w'|acc' w' [e|]]; try contradiction.
+        - destruct Hshape as (Hla & -> & Hlt).
+          rewrite Hf', F; unfold target_is; rewrite Ht'; fold (target_is γ n w); rewrite Hti, Hb'; cbn [andb].
+          unfold T, Termination.muU, Termination.dflag; cbn [Termination.Wt disposed].
+          destruct (bt γ n); destruct (disposed fn); unfold Bm; lia.
+        - subst acc'; unfold T, Termination.muU, Termination.dflag; cbn [Termination.Wt disposed].
+          match goal with |- context [Termination.Wt _ ?g acc] => pose proof (Wt_le Σ g acc) end.
+          destruct (bt γ n); destruct (bt (set_life Σ γ1 n fn (Unloading Σ acc w' (Some e))) n);
+            destruct (disposed fn); unfold Bm; lia. }
+      Ltac finx2 Goal Hst Hrl :=
+        rewrite Hrl; apply Goal; [apply Hst; apply Hrl | cbn; repeat split; auto].
+      destruct P as [| |k a κ|k s P'|c P'].
+      + contradiction.
+      + cbn [load_step] in Hst |- *; finx2 Goal Hst Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        rewrite (load_step_op K_eq_dec Σ prog' γ n fn k a κ acc w) in Hst |- *.
+        destruct (op_binding K_eq_dec Σ prog' γ n fn k w) as [b|]; [|finx2 Goal Hst Hrl].
+        destruct (run a (next γ) (bst Σ b)) as [[[s' g] o]|]; finx2 Goal Hst Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        cbn [load_step] in Hst |- *.
+        destruct (kmem K_eq_dec k (provs Σ (prog' (fcomp fn)))); [|finx2 Goal Hst Hrl].
+        destruct (binds γ k); finx2 Goal Hst Hrl.
+      + assert (Hlt : length acc < Kb) by (inversion HbP; lia).
+        cbn [load_step] in Hst |- *.
+        destruct (conflict K_eq_dec Σ prog' γ c); finx2 Goal Hst Hrl. }
       assert (Hmu : xmu γ n fn = 3 * Kb + 10 - length acc)
         by (unfold xmu, xtis; rewrite Hl, F, Hti; reflexivity).
       rewrite Hmu.
@@ -409,9 +452,10 @@ Section OptTermination.
       destruct (target_is γ n w) eqn:Hti; [discriminate|]; injection H as <-.
       rewrite Hrl; destruct (Hst _ (Hrl _ _)) as (_ & Hb & _).
       unfold xmu; cbn [life]; rewrite Hl, (xtis_false γ n fn w Hti), Hb.
-      unfold Termination.muU; rewrite (Wt_ext Σ γ _ acc); [unfold Termination.dflag; cbn; lia|].
-      intros x Hx; apply childflag_relife; [reflexivity|].
-      apply (own_item_ne_x γ n fn x I Hn); rewrite Hl; exact Hx.
+      destruct (LB n fn P acc w Hn Hl) as [Hlen _].
+      unfold Termination.muU, Termination.dflag; cbn [Termination.Wt disposed].
+      match goal with |- context [Termination.Wt _ ?g acc] => pose proof (Wt_le Σ g acc) end.
+      destruct (bt γ n); destruct (disposed fn); unfold Bm; lia.
     - (* LLeave *)
       destruct (life fn) as [| |acc w|] eqn:Hl; try discriminate.
       destruct (target_is γ n w) eqn:Hti; [discriminate|]; injection H as <-.
@@ -486,7 +530,11 @@ Section OptTermination.
       apply (own_item_ne_x γ n fn x I Hn); destruct Hl as [Hl|Hl]; rewrite Hl; exact Hx. }
     unfold xmu at 1; cbn [life]; rewrite Hb.
     unfold xmu, xtis; rewrite F; cbn [andb].
-    destruct Hl as [Hl|Hl]; rewrite Hl; unfold Termination.muU; rewrite Hw; unfold Termination.dflag; cbn [Calculus.disposed]; destruct (bt γ n); lia.
+    destruct Hl as [Hl|Hl]; rewrite Hl; unfold Termination.muU; rewrite Hw; unfold Termination.dflag; cbn [Calculus.disposed].
+    - destruct (proj1 (proj2 I) n fn P acc w Hn Hl) as [Hlen _].
+      pose proof (Wt_le Σ γ acc); cbn [Termination.Wt].
+      destruct (bt γ n); destruct (disposed fn); unfold Bm; lia.
+    - destruct (bt γ n); lia.
   Qed.
 
   (** ** The measure of a state *)

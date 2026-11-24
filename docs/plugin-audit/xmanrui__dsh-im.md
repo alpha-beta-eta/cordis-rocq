@@ -24,3 +24,5 @@
 
 **最高层**：1 (宿主端)。启动/卸载闭合、有界有秩、无猴补丁；但运行期 bot runtime 不是子 fiber，审批/提问中间件 `prepend` 与其他 IM 插件相遇不受控，自更新是编排者行为；启动结果依赖通道是否成功与子 fiber 结果。
 **升级路径**：(1) `agents`/`agentPresets`/`speechToText`/`desktopPnpm*` 改为可选 inject；(2) 每个通道 (乃至每个 bot runtime) 用 `ctx.plugin` 子 fiber 承载，通道失败只让自己的子 fiber 失败而不吞错，`approval/request`/`user-questions/request` 去掉 `prepend` 或按会话归属先判定后再决定是否 `next()` (已如此) 并在文档中约定唯一拦截者——R2/R3 满足即到第 2 层 (自更新另记编排者义务)；(3) 第 3 层还需去掉父 `apply` 对子 fiber 的 `await` 与"按服务存在与否登记"的分支。
+
+**复核 (2026-11-24)**：`connection` 在顶层 `inject` 中是必需依赖 (`plugin-src/host/index.mjs:35-39`)，C2 第 (2) 点里 `ctx?.connection?.fetch` (216) 检查的是接口形状而非存在性；`tools`/`systemPrompt` 的登记已在静态 inject 子 fiber 里 (199-207)，`ctx.tools` 分支只是无 `inject` 宿主的退路。C2 剩下第 (1) 点 (外部世界) 与第 (3) 点 (父 fiber `await` 子 fiber)。
