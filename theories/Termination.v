@@ -1,6 +1,6 @@
 (** * Progress (R3, fourth part, continued): termination
 
-    Counterpart of the second half of the paper's Theorem 66: lifecycle
+    Counterpart of the second half of the paper's Theorem 73: lifecycle
     steps alone cannot go on for ever.
 
     Hypotheses:
@@ -218,13 +218,14 @@ Section Termination.
       apply (lb_relife γ γ); [exact LB | intros; left; assumption | intros ? ? ? E; discriminate E].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z]; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       apply (lb_relife γ γ1);
         [exact LB | intros m fm; rewrite E; left; auto | intros ? ? ? E'; discriminate E'].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       intros m fm P acc' w' Hm Hl; apply fibers_set_fiber_inv in Hm as [[-> ->]|[_ Hm]];
         cbn in Hl; [exact (LB m0 g P acc' w' Hg Hl) | exact (LB m fm P acc' w' Hm Hl)].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
@@ -317,12 +318,13 @@ Section Termination.
       apply (so_relife γ); auto; intros m Hm; rewrite Hl; exact Hm.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       apply (so_relife γ); auto; intros m Hm; rewrite Hl; right; exact Hm.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       apply so_set_disposed; auto.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
@@ -485,6 +487,7 @@ Section Termination.
       apply effects_relife; auto; apply bok_same; reflexivity.
     - (* LUndo *)
       destruct (life fn) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct u as [k p t g|k p|m]; cbn [undo_step] in H.
       + destruct (binds γ k) as [b|] eqn:Hb.
         * destruct (Nat.eqb (pid b) p); injection H as <-; apply effects_relife; auto.
@@ -506,7 +509,7 @@ Section Termination.
     - (* LRetireChild *)
       destruct (life fn) as [| | |[|[k p t g|k p|mm] acc] w z] eqn:Hl; try discriminate.
       destruct (fibers γ mm) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g) eqn:Hd; [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g) eqn:Hd; [discriminate|]; injection H as <-.
       assert (Hin : In (USpawn Σ mm) (acc_of (life fn))) by (rewrite Hl; left; reflexivity).
       assert (Hmn : mm <> n).
       { intros ->; rewrite Hn in Hg; injection Hg as <-.
@@ -771,6 +774,7 @@ Section Termination.
       apply (own_item_ne γ n fn x I Hn); rewrite Hl; exact Hx.
     - (* LUndo *)
       destruct (life fn) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' n fn u acc w z H) as (γ1 & -> & E).
       rewrite Hrl; specialize (Ht _ (Hrl _ _)).
       unfold mu; cbn [life]; rewrite Hl, Ht.
@@ -781,7 +785,7 @@ Section Termination.
     - (* LRetireChild *)
       destruct (life fn) as [| | |[|[k p t g|k p|mm] acc] w z] eqn:Hl; try discriminate.
       destruct (fibers γ mm) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g) eqn:Hdg; [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g) eqn:Hdg; [discriminate|]; injection H as <-.
       assert (Hmn : mm <> n)
         by (apply (own_item_ne γ n fn mm I Hn); rewrite Hl; left; reflexivity).
       assert (Hn' : fibers (set_fiber Σ γ mm (mkFiber Σ (fcomp g) (parent g) true (life g))) n

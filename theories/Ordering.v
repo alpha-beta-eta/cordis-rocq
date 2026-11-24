@@ -1,6 +1,6 @@
 (** * Ordering and resolution coherence (R3, second part)
 
-    Counterparts of the paper's Theorem 63 (ordering) and Theorem 64
+    Counterparts of the paper's Theorem 70 (ordering) and Theorem 71
     (resolution coherence) for the v1 calculus.
 
     - Every fiber follows the lifecycle automaton of Figure 2, keeps its
@@ -10,11 +10,12 @@
       by an Active provider.
     - While a fiber is installed, every provision it resolved still exists
       and its provider is installed: providers outlive consumers. The view
-      fixes the provision (its pid) for the whole episode. The paper's claim
-      that the value read stays fixed has no counterpart here: service
-      states are shared and change by design.
-    - A provision is withdrawn only when no other installed fiber resolves
-      it; a parent passes a spawn undo item only after the child is gone.
+      fixes the provision (its pid) for the whole episode. The paper's
+      clause (3) also says which fibers may move the value: a fiber that
+      declares or provides the key ([value_moves]).
+    - An Unloading fiber undoes nothing while another installed fiber
+      resolves one of its pending provisions; a parent passes a spawn undo
+      item only after the child is gone.
     - A Loading fiber takes a step only against its committed view; once
       its target differs, it can only divert. *)
 
@@ -202,6 +203,7 @@ Section Ordering.
       rewrite Hl; reflexivity.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape γ γ' n f u acc w z H) as (γ1 & -> & E).
       assert (Hk : forall m0 fm0, fibers γ m0 = Some fm0 -> fibers γ1 m0 = Some fm0)
         by (intros m0 fm0; rewrite E; auto).
@@ -210,7 +212,7 @@ Section Ordering.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z] eqn:Hl; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       exact (set_fiber_Same γ m0 g true m fm fm' Hg Hm Hm').
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
@@ -289,12 +291,12 @@ Section Ordering.
       eapply Lift0; eauto.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z]; try discriminate.
-      destruct (undo_step_shape γ γ' n f u acc w z H) as (γ1 & -> & E).
+      unheld H; destruct (undo_step_shape γ γ' n f u acc w z H) as (γ1 & -> & E).
       eapply Lift0; eauto.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       apply fibers_set_fiber_inv in Hm' as [[-> _]|[_ Hm']]; congruence.
     - destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z]; try discriminate.
@@ -366,7 +368,8 @@ Section Ordering.
     forall m fm k', m <> n -> fibers γ m = Some fm -> ~ In (k', p) (view_of (life fm)).
   Proof.
     intros W Hn Hl H m fm k' Hmn Hm Hin.
-    cbn [step] in H; rewrite Hn, Hl in H; cbn [undo_step] in H.
+    cbn [step] in H; rewrite Hn, Hl in H.
+    unheld H; cbn [undo_step] in H.
     destruct (relied Σ γ n p) eqn:Hr; [discriminate|].
     eapply (relied_false K_eq_dec Σ prog γ n p m fm k' W Hr Hm Hmn); [|exact Hin].
     exact (view_installed Σ _ _ _ Hin).
@@ -389,8 +392,53 @@ Section Ordering.
     fibers γ n = Some f -> life f = Unloading Σ (USpawn Σ m :: acc) w z ->
     step γ (LUndo n) = Some γ' -> fibers γ m = None.
   Proof.
-    intros Hn Hl H; cbn [step] in H; rewrite Hn, Hl in H; cbn [undo_step] in H.
+    intros Hn Hl H; cbn [step] in H; rewrite Hn, Hl in H.
+    unheld H; cbn [undo_step] in H.
     destruct (fibers γ m); [discriminate | reflexivity].
+  Qed.
+
+  (** An Unloading fiber undoes nothing, and retires no child, while any
+      provision it has yet to withdraw is still resolved by another
+      installed fiber: its dependents tear down against all of its effects,
+      not only against the provision itself (Cordis waits for every
+      dependent before starting any disposer). *)
+  Theorem unload_waits (γ γ' : State) n f acc w z ℓ :
+    WF γ -> fibers γ n = Some f -> life f = Unloading Σ acc w z ->
+    (ℓ = LUndo n \/ ℓ = LRetireChild n) -> step γ ℓ = Some γ' ->
+    forall k p m fm k', In (UProv Σ k p) acc -> m <> n -> fibers γ m = Some fm ->
+    ~ In (k', p) (view_of (life fm)).
+  Proof.
+    intros W Hn Hl Hℓ H k p m fm k' Hu Hmn Hm Hin.
+    assert (Hh : held Σ γ n acc = false).
+    { destruct Hℓ as [->| ->]; cbn [step] in H; rewrite Hn, Hl in H.
+      - destruct acc as [|u acc]; [discriminate|].
+        unheld H; reflexivity.
+      - destruct acc as [|[k0 p0 t0 g0|k0 p0|m0] acc]; try discriminate.
+        destruct (fibers γ m0) as [g|]; [|discriminate].
+        unheld H; reflexivity. }
+    assert (Hr : relied Σ γ n p = false).
+    { destruct (relied Σ γ n p) eqn:Hr; [|reflexivity].
+      exfalso; apply (proj2 (not_true_iff_false _) Hh), existsb_exists.
+      exists (UProv Σ k p); split; [exact Hu | exact Hr]. }
+    eapply (relied_false K_eq_dec Σ prog γ n p m fm k' W Hr Hm Hmn); [|exact Hin].
+    exact (view_installed Σ _ _ _ Hin).
+  Qed.
+
+  (** Conversely, both rules are blocked while such a dependent remains. *)
+  Theorem unload_blocked (γ : State) n f acc w z k p m fm k' :
+    WF γ -> fibers γ n = Some f -> life f = Unloading Σ acc w z ->
+    In (UProv Σ k p) acc -> m <> n -> fibers γ m = Some fm ->
+    In (k', p) (view_of (life fm)) ->
+    step γ (LUndo n) = None /\ step γ (LRetireChild n) = None.
+  Proof.
+    intros W Hn Hl Hu Hmn Hm Hin.
+    split.
+    - destruct (step γ (LUndo n)) as [γ'|] eqn:H; [|reflexivity]; exfalso.
+      exact (unload_waits γ γ' n f acc w z (LUndo n) W Hn Hl (or_introl eq_refl) H
+               k p m fm k' Hu Hmn Hm Hin).
+    - destruct (step γ (LRetireChild n)) as [γ'|] eqn:H; [|reflexivity]; exfalso.
+      exact (unload_waits γ γ' n f acc w z (LRetireChild n) W Hn Hl (or_intror eq_refl) H
+               k p m fm k' Hu Hmn Hm Hin).
   Qed.
 
   (** ** Resolution coherence *)
@@ -465,5 +513,312 @@ Section Ordering.
     destruct (target_is K_eq_dec Σ prog γ n w) eqn:Ht; [discriminate|].
     exists f, acc, w; repeat split; auto.
     intros E; apply target_is_spec in E; congruence.
+  Qed.
+  (** ** Who moves a binding's value (the paper's Theorem 70(3))
+
+      The paper's clause (3) says that, during a dependent's episode, the
+      provider's entry at the key exists ([provider_outlives]) and moves only
+      by operations at that key of fibers declaring it. Here a fiber may
+      operate at a key it declares or provides, so the counterpart reads:
+      across a step that keeps a binding's pid, its value moves only by an
+      [L-Step] or [L-Undo] of a fiber that declares or provides the key
+      ([value_moves]). The undo case rests on an invariant: an operation
+      undo item sits only in the accumulator of a fiber that declares or
+      provides its key ([Decl], [decl_reachable]). *)
+  Definition Declares (f : Fiber) (k : K) : Prop :=
+    kmem K_eq_dec k (deps Σ (prog (fcomp f))) = true \/
+    kmem K_eq_dec k (provs Σ (prog (fcomp f))) = true.
+
+  Definition DeclF (f : Fiber) : Prop :=
+    forall k p t g, In (UOp Σ k p t g) (acc_of (life f)) -> Declares f k.
+
+  Definition Decl (γ : State) : Prop :=
+    forall m f, fibers γ m = Some f -> DeclF f.
+
+  Lemma decl_init : Decl (@init K Σ C).
+  Proof. intros m f H; discriminate H. Qed.
+
+  Lemma decl_relife (γ γ1 : State) n f (l : Life) :
+    Decl γ -> fibers γ n = Some f ->
+    (forall m fm, fibers γ1 m = Some fm ->
+       fibers γ m = Some fm \/ exists z, life fm = Inactive Σ z) ->
+    (forall k p t g, In (UOp Σ k p t g) (acc_of l) ->
+       In (UOp Σ k p t g) (acc_of (life f)) \/ Declares f k) ->
+    Decl (set_life Σ γ1 n f l).
+  Proof.
+    intros D Hn Hlk Hl m fm H.
+    apply fibers_set_life_inv in H as [[-> ->]|[_ H]].
+    - intros k p t g I; cbn in I.
+      destruct (Hl k p t g I) as [I'|Hd]; [exact (D n f Hn k p t g I') | exact Hd].
+    - destruct (Hlk m fm H) as [H0|[z Hz]]; [exact (D m fm H0)|].
+      intros k p t g I; rewrite Hz in I; destruct I.
+  Qed.
+
+  Lemma decl_refiber (γ : State) n f b :
+    Decl γ -> fibers γ n = Some f ->
+    Decl (set_fiber Σ γ n (mkFiber Σ (fcomp f) (parent f) b (life f))).
+  Proof.
+    intros D Hn m fm H; apply fibers_set_fiber_inv in H as [[-> ->]|[_ H]].
+    - intros k p t g I; exact (D n f Hn k p t g I).
+    - exact (D m fm H).
+  Qed.
+
+  (** An operation of [n] at [k] resolves only if [n] declares [k] or owns
+      its binding, and an owner provides the key. *)
+  Lemma resolved_declares (γ : State) n f k :
+    WF γ -> fibers γ n = Some f ->
+    (kmem K_eq_dec k (deps Σ (prog (fcomp f))) = false ->
+     exists b, binds γ k = Some b /\ owner b = n) ->
+    Declares f k.
+  Proof.
+    intros W Hn H; unfold Declares.
+    destruct (kmem K_eq_dec k (deps Σ (prog (fcomp f)))) eqn:Hd; [left; reflexivity|right].
+    destruct (H eq_refl) as (b & Hb & Ho).
+    destruct (wf_bind K_eq_dec Σ prog γ W k b Hb) as (fo & Hfo & _ & Hk & _).
+    rewrite Ho, Hn in Hfo; injection Hfo as <-; exact Hk.
+  Qed.
+
+  Ltac rp_declares W Hn Hrp :=
+    apply (resolved_declares _ _ _ _ W Hn); intros Hd; rewrite Hd in Hrp; cbv beta iota in Hrp;
+    lazymatch type of Hrp with
+    | (match binds ?g ?k with _ => _ end) = Some _ =>
+        destruct (binds g k) as [b0|] eqn:Hb0; [|discriminate Hrp]
+    | _ => idtac
+    end;
+    lazymatch type of Hrp with
+    | (if Nat.eqb (owner ?b1) ?n then _ else _) = Some _ =>
+        destruct (Nat.eqb_spec (owner b1) n) as [Ho|]; [|discriminate Hrp];
+        exists b1; split; [assumption | exact Ho]
+    end.
+
+  Theorem decl_step (γ γ' : State) ℓ :
+    WF γ -> Decl γ -> step γ ℓ = Some γ' -> Decl γ'.
+  Proof.
+    intros W D H.
+    assert (Same0 : forall m fm, fibers γ m = Some fm ->
+              fibers γ m = Some fm \/ exists z, life fm = Inactive Σ z)
+      by (intros; left; assumption).
+    assert (Fresh : forall c q m fm,
+              fibers (bump Σ (with_fibers Σ γ (fupd Σ (fibers γ) (next γ)
+                 (Some (mkFiber Σ c q false (Inactive Σ None)))))) m = Some fm ->
+              fibers γ m = Some fm \/ exists z, life fm = Inactive Σ z).
+    { intros c q m fm Hm; cbn in Hm; unfold fupd in Hm.
+      destruct (Nat.eqb m (next γ));
+        [injection Hm as <-; right; eexists; reflexivity | left; exact Hm]. }
+    destruct ℓ as [c|n|n|n|n|n|n|n|n|n|n|n i|n]; cbn [step] in H.
+    - (* OInsert *)
+      destruct (conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      intros m fm Hm; destruct (Fresh c None m fm Hm) as [H0|[z Hz]]; [exact (D m fm H0)|].
+      intros k p t g I; rewrite Hz in I; destruct I.
+    - (* ODispose *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate]; injection H as <-.
+      exact (decl_refiber γ n f true D Hn).
+    - (* OReset *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [[z|]| | |] eqn:Hl; try discriminate; injection H as <-.
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 | intros k p t g []].
+    - (* LBegin *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [[z|]| | |] eqn:Hl; try discriminate.
+      destruct (target γ n); [|discriminate]; injection H as <-.
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 | intros k p t g []].
+    - (* LStep *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      assert (Keep : forall γ1 (l : Life),
+                (forall m fm, fibers γ1 m = Some fm ->
+                   fibers γ m = Some fm \/ exists z, life fm = Inactive Σ z) ->
+                (forall k p t g, In (UOp Σ k p t g) (acc_of l) ->
+                   In (UOp Σ k p t g) acc \/ Declares f k) ->
+                Decl (set_life Σ γ1 n f l)).
+      { intros γ1 l Hlk Hit; apply (decl_relife γ γ1 n f l D Hn Hlk).
+        intros k p t g I; rewrite Hl; exact (Hit k p t g I). }
+      destruct P0 as [| |k a κ|k s P'|c P']; cbn [load_step].
+      + apply Keep; [exact Same0 | intros k p t g I; left; exact I].
+      + apply Keep; [exact Same0 | intros k p t g I; left; exact I].
+      + match goal with |- Decl (match ?x with _ => _ end) => destruct x as [p|] eqn:Hrp end.
+        2: { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        destruct (binds γ k) as [b|] eqn:Hb.
+        2: { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        destruct (Nat.eqb (pid b) p).
+        2: { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        destruct (run a (next γ) (bst Σ b)) as [[[s' g] o]|].
+        * apply Keep; [exact Same0|].
+          intros k0 p0 t0 g0 [E|I]; [|left; exact I].
+          injection E as E1 _ _ _; subst k0; right.
+          rp_declares W Hn Hrp.
+        * apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I].
+      + destruct (kmem K_eq_dec k (provs Σ (prog (fcomp f)))).
+        2: { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        destruct (binds γ k).
+        { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        apply Keep; [exact Same0 | intros k0 p0 t0 g0 [E|I]; [discriminate E | left; exact I]].
+      + destruct (conflict K_eq_dec Σ prog γ c).
+        { apply Keep; [exact Same0 | intros k0 p0 t0 g0 I; left; exact I]. }
+        apply Keep;
+          [exact (Fresh c (Some n)) | intros k0 p0 t0 g0 [E|I]; [discriminate E | left; exact I]].
+    - (* LDivert *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 |].
+      intros k p t g I; left; rewrite Hl; exact I.
+    - (* LLeave *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| |acc w|] eqn:Hl; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 |].
+      intros k p t g I; left; rewrite Hl; exact I.
+    - (* LUndo *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
+      apply undo_step_shape in H as (γ1 & -> & E).
+      apply (decl_relife γ γ1 n f); [exact D | exact Hn | |].
+      + intros m fm Hm; left; rewrite <- E; exact Hm.
+      + intros k p t g I; left; rewrite Hl; right; exact I.
+    - (* LRetireChild *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| | |[|[k0 p0 t0 g0|k0 p0|m0] acc] w z] eqn:Hl; try discriminate.
+      destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
+      unheld H.
+      destruct (disposed g); [discriminate|]; injection H as <-.
+      exact (decl_refiber γ m0 g true D Hg).
+    - (* LUnloaded *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate; injection H as <-.
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 | intros k p t g []].
+    - (* LRemove *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [z| | |] eqn:Hl; try discriminate.
+      destruct (disposed f && negb (has_child Σ γ n)); [|discriminate]; injection H as <-.
+      intros m fm Hm; cbn in Hm; unfold fupd in Hm.
+      destruct (Nat.eqb m n); [discriminate | exact (D m fm Hm)].
+    - (* OReact *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| |acc w|] eqn:Hl; try discriminate.
+      destruct (nth_error (reacts Σ (prog (fcomp f))) i) as [c|]; [|discriminate].
+      destruct (disposed f || conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      apply (decl_relife γ _ n f); [exact D | exact Hn | exact (Fresh c (Some n)) |].
+      intros k p t g [E|I]; [discriminate E | left; rewrite Hl; exact I].
+    - (* ORestart *)
+      apply (restart_shape K_eq_dec Σ prog) in H as (f & acc & w & Hn & _ & [P Hl] & ->).
+      apply (decl_relife γ γ n f); [exact D | exact Hn | exact Same0 |].
+      intros k p t g I; left; destruct Hl as [Hl|Hl]; rewrite Hl; exact I.
+  Qed.
+
+  Corollary decl_reachable (γ : State) (ls : list Label) :
+    run_labels K_eq_dec Σ prog (@init K Σ C) ls = Some γ -> Decl γ.
+  Proof.
+    assert (G : forall γ0 ls γ, WF γ0 -> Decl γ0 ->
+              run_labels K_eq_dec Σ prog γ0 ls = Some γ -> Decl γ).
+    { intros γ0 ls0; revert γ0; induction ls0 as [|ℓ ls0 IH]; cbn; intros γ0 γ1 W0 D0 H.
+      - injection H as <-; exact D0.
+      - destruct (step γ0 ℓ) as [γ0'|] eqn:Hs; [|discriminate].
+        exact (IH γ0' γ1 (preservation K_eq_dec Σ prog γ0 γ0' ℓ W0 Hs)
+                 (decl_step γ0 γ0' ℓ W0 D0 Hs) H). }
+    intros H; exact (G _ ls γ (wf_init K_eq_dec Σ prog) decl_init H).
+  Qed.
+
+  (** A binding that keeps its pid across a step either keeps its value or
+      is moved by an [L-Step] or [L-Undo] of a fiber that declares or
+      provides its key. *)
+  Theorem value_moves (γ γ' : State) ℓ k b b' :
+    WF γ -> Decl γ -> step γ ℓ = Some γ' ->
+    binds γ k = Some b -> binds γ' k = Some b' -> pid b' = pid b ->
+    b' = b \/
+    exists n f, fibers γ n = Some f /\ (ℓ = LStep n \/ ℓ = LUndo n) /\ Declares f k.
+  Proof.
+    intros W D H Hb Hb' Hp.
+    assert (Keep : binds γ k = Some b' -> b' = b \/
+              exists n f, fibers γ n = Some f /\ (ℓ = LStep n \/ ℓ = LUndo n) /\ Declares f k).
+    { intros E; left; rewrite Hb in E; injection E as <-; reflexivity. }
+    destruct ℓ as [c|n|n|n|n|n|n|n|n|n|n|n i|n]; cbn [step] in H.
+    - destruct (conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate]; injection H as <-; apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [[z|]| | |]; try discriminate; injection H as <-; apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [[z|]| | |]; try discriminate.
+      destruct (target γ n); [|discriminate]; injection H as <-; apply Keep; exact Hb'.
+    - (* LStep *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [|P0 acc w| |] eqn:Hl; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [|discriminate]; injection H as <-.
+      destruct P0 as [| |k0 a κ|k0 s P'|c P']; cbn [load_step] in Hb' |- *.
+      + apply Keep; exact Hb'.
+      + apply Keep; exact Hb'.
+      + match type of Hb' with context [match ?x with Some _ => _ | None => _ end] =>
+          match x with binds _ _ => fail 1 | _ => destruct x as [p|] eqn:Hrp end end.
+        2: { apply Keep; exact Hb'. }
+        destruct (binds γ k0) as [b0|] eqn:Hb0.
+        2: { apply Keep; exact Hb'. }
+        destruct (Nat.eqb (pid b0) p).
+        2: { apply Keep; exact Hb'. }
+        destruct (run a (next γ) (bst Σ b0)) as [[[s' g] o]|].
+        * cbn in Hb'; unfold bupd, keqb in Hb'.
+          destruct (K_eq_dec k k0) as [->|Ne].
+          -- right; exists n, f; split; [exact Hn | split; [left; reflexivity|]].
+             rp_declares W Hn Hrp.
+          -- apply Keep; exact Hb'.
+        * apply Keep; exact Hb'.
+      + destruct (kmem K_eq_dec k0 (provs Σ (prog (fcomp f)))).
+        2: { apply Keep; exact Hb'. }
+        destruct (binds γ k0) as [b0|] eqn:Hb0.
+        { apply Keep; exact Hb'. }
+        cbn in Hb'; unfold bupd, keqb in Hb'.
+        destruct (K_eq_dec k k0) as [->|Ne]; [congruence | apply Keep; exact Hb'].
+      + destruct (conflict K_eq_dec Σ prog γ c); apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [|P0 acc w| |]; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [| |acc w|]; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      apply Keep; exact Hb'.
+    - (* LUndo *)
+      destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
+      destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
+      destruct u as [k0 p0 t0 g0|k0 p0|m0]; cbn [undo_step] in H.
+      + destruct (binds γ k0) as [b0|] eqn:Hb0.
+        2: { injection H as <-; apply Keep; exact Hb'. }
+        destruct (Nat.eqb (pid b0) p0).
+        2: { injection H as <-; apply Keep; exact Hb'. }
+        injection H as <-; cbn in Hb'; unfold bupd, keqb in Hb'.
+        destruct (K_eq_dec k k0) as [->|Ne].
+        * right; exists n, f; split; [exact Hn | split; [right; reflexivity|]].
+          apply (D n f Hn k0 p0 t0 g0); rewrite Hl; left; reflexivity.
+        * apply Keep; exact Hb'.
+      + destruct (relied Σ γ n p0); [discriminate|].
+        destruct (binds γ k0) as [b0|] eqn:Hb0.
+        2: { injection H as <-; apply Keep; exact Hb'. }
+        destruct (Nat.eqb (pid b0) p0).
+        2: { injection H as <-; apply Keep; exact Hb'. }
+        injection H as <-; cbn in Hb'; unfold bupd, keqb in Hb'.
+        destruct (K_eq_dec k k0) as [->|Ne]; [discriminate Hb' | apply Keep; exact Hb'].
+      + destruct (fibers γ m0); [discriminate|]; injection H as <-; apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [| | |[|[k0 p0 t0 g0|k0 p0|m0] acc] w z]; try discriminate.
+      destruct (fibers γ m0) as [g|]; [|discriminate].
+      unheld H.
+      destruct (disposed g); [discriminate|]; injection H as <-; apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [| | |[|u acc] w z]; try discriminate; injection H as <-.
+      apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [z| | |]; try discriminate.
+      destruct (disposed f && negb (has_child Σ γ n)); [|discriminate]; injection H as <-.
+      apply Keep; exact Hb'.
+    - destruct (fibers γ n) as [f|]; [|discriminate].
+      destruct (life f) as [| |acc w|]; try discriminate.
+      destruct (nth_error (reacts Σ (prog (fcomp f))) i) as [c|]; [|discriminate].
+      destruct (disposed f || conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      apply Keep; exact Hb'.
+    - apply (restart_shape K_eq_dec Σ prog) in H as (f & acc & w & Hn & _ & _ & ->).
+      apply Keep; exact Hb'.
   Qed.
 End Ordering.

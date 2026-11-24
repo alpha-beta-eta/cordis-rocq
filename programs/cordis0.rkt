@@ -136,6 +136,11 @@
 (define (relied γ n p)
   (ormap (λ (m) (and (not (= m n)) (resolves γ m p))) (names γ)))
 
+;卸载的守卫: acc 中某个尚未撤回的 provision 仍被别的已安装 fiber 解析.
+;成立时 n 既不撤销任何一项, 也不请子 fiber 退出 (Cordis 先等全部依赖者再启动 disposer)
+(define (held γ n acc)
+  (ormap (λ (u) (match u [(UProv _ p) (relied γ n p)] [_ #f])) acc))
+
 (define (has-child γ n)
   (ormap (λ (m)
            (match (fibers γ m)
@@ -230,6 +235,7 @@
            (set-life γ1 n f (Loading P* (cons (USpawn m) acc) w))))]))
 
 ;;; Unloading 中的 fiber 撤销一项
+;step 只在 held 不成立时调用它, 那时表头 UProv 的 relied 必然不成立; 这里的检查让 undo-step 自身也完整
 
 (define (undo-step γ n f u acc w z)
   (define (continue γ*) (set-life γ* n f (Unloading acc w z)))
@@ -313,17 +319,18 @@
      (match (fibers γ n)
        [(? fiber? f)
         (match (fiber-life f)
-          [(Unloading (cons u acc) w z) (undo-step γ n f u acc w z)]
+          [(Unloading (cons u acc) w z)
+           (if (held γ n (cons u acc)) #f (undo-step γ n f u acc w z))]
           [_ #f])]
        [#f #f])]
     [(LRetireChild n)
      (match (fibers γ n)
        [(? fiber? f)
         (match (fiber-life f)
-          [(Unloading (cons (USpawn m) _) _ _)
+          [(Unloading (cons (USpawn m) acc) _ _)
            (match (fibers γ m)
              [(? fiber? g)
-              (if (fiber-disposed g)
+              (if (or (held γ n (cons (USpawn m) acc)) (fiber-disposed g))
                   #f
                   (set-fiber γ m (fiber (fiber-comp g) (fiber-parent g) #t (fiber-life g))))]
              [#f #f])]
@@ -533,6 +540,12 @@
 (define components
   (hash
    'core (component '() '(tools) (program (serve 'tools (inl (hash))) (PDone)) '())
+   ;提供 tools 之后自己再登记一个条目, 用来检查卸载守卫作用于整个卸载
+   'core+ (component '() '(tools)
+                     (program (serve 'tools (inl (hash)))
+                              ('tools (reg "builtin" "内建"))
+                              (PDone))
+                     '())
    'shell (component '(tools) '()
                      (program ('tools (reg "ls" "列出文件"))
                               ('tools (reg "cat" "打印文件"))
@@ -588,7 +601,7 @@
   (scene "装 toolkit: 它在加载中 spawn 两个子插件" (OInsert 'toolkit))
   (scene "移除 toolkit: 先 LRetireChild 让 sed-tool 弃置, 等它被移除后再撤 help, 再 grep-tool"
          (ODispose (fiber-named γ 'toolkit)))
-  (scene "restart core: 依赖者先 LLeave, core 撤销 UProv 时等它们 (relied), 再重新提供"
+  (scene "restart core: 依赖者先 LLeave, core 在它们卸载完之前什么都不撤 (held), 再重新提供"
          (ORestart (fiber-named γ 'core)))
   (scene "装 bad: 第二次 Register 失败, Unloading(EOp), 卸完停在 Inactive(EOp)"
          (OInsert 'bad))
@@ -621,6 +634,22 @@
   (match-let ([(list s* g _) (run Σ (inr (OnByCallback "cb")) 7 (inr '((3 . "cb"))))])
     (check-equal? (g s*) (inr '((7 . "cb")))))
   (check-false (run Σ (reg "x" 1) 0 (inr '())))   ;跨服务的操作失败
+
+  ;; 守卫作用于整个卸载 (held): core+ 在 provide 之后登记了 builtin;
+  ;; 重启时只要 shell 还解析着 tools, core+ 连 builtin 也不撤, 也就是
+  ;; shell 卸载时看到的是 core+ 的全部效应
+  (let* ([γ (go (orch init (OInsert 'core+) (OInsert 'shell)))]
+         [γ (orch γ (ORestart 0))])
+    (check-false (step Σ prog γ (LUndo 0)))
+    (define γ1 (run-labels Σ prog γ (list (LLeave 1))))
+    (check-false (step Σ prog γ1 (LUndo 0)))
+    (check-equal? (tools-of γ1) '("builtin" "cat" "ls"))
+    (define γ2 (run-labels Σ prog γ1 (list (LUndo 1) (LUndo 1))))
+    (check-equal? (tools-of γ2) '("builtin"))
+    (check-false (step Σ prog γ2 (LUndo 0)))          ; shell 还没卸载完
+    (define γ3 (run-labels Σ prog γ2 (list (LUnloaded 1))))
+    (check-not-false (step Σ prog γ3 (LUndo 0)))
+    (check-equal? (tools-of (go γ3)) '("builtin" "cat" "ls")))
 
   ;; Examples/Basic.v: consumer 在 provider Active 之前不能 LBegin
   (let* ([γ (orch init (OInsert 'shell) (OInsert 'core))])

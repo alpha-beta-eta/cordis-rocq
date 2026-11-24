@@ -802,6 +802,7 @@ Section Episode.
     - (* LUndo *)
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [z|P acc w|acc w|[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct u as [k p t g|k p|m]; cbn [undo_step] in H.
       + destruct (binds γ k) as [b|] eqn:Hb; [destruct (Nat.eqb (pid b) p)|];
           injection H as <-; relife SI EP NFx Hx; exact Logic.I.

@@ -1,6 +1,6 @@
 (** * Progress (R3, fourth part): no deadlock
 
-    Counterpart of the first half of the paper's Theorem 66.
+    Counterpart of the first half of the paper's Theorem 73.
 
     A state is settled when every fiber has reached where its target puts
     it: a failed fiber rests Inactive, a fiber that ought not to run rests
@@ -10,7 +10,8 @@
     has a lifecycle rule to take.
 
     The only place a fiber can wait is while Unloading: for the dependents
-    of a provision to leave, or for a child to be removed. Waiting cannot
+    of its provisions to leave (before it undoes anything), or for a child
+    to be removed. Waiting cannot
     go round in a circle provided the relation "provides a key the other
     declares, or may spawn it" between components has no infinite ascending
     chain, the counterpart of the paper's assumption that ≺ is acyclic and
@@ -289,6 +290,7 @@ Section Progress.
       apply Same; auto; intros m Hm; rewrite Hl; exact Hm.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       assert (Ht : forall m, In (USpawn Σ m) acc -> In (USpawn Σ m) (acc_of (life f)))
         by (intros m Hm; rewrite Hl; right; exact Hm).
       destruct u as [k p t g|k p|m]; cbn [undo_step] in H.
@@ -311,7 +313,7 @@ Section Progress.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       split; [apply (pu_same γ); [intros; reflexivity | exact PU]|].
       eapply sp_set_fiber; eauto.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
@@ -436,7 +438,7 @@ Section Progress.
       { pose proof (QU n (LUnloaded n) ltac:(cbn; tauto)) as E.
         cbn [step] in E; rewrite Hn, Hl in E; discriminate. }
       pose proof (QU n (LUndo n) ltac:(cbn; tauto)) as E.
-      cbn [step] in E; rewrite Hn, Hl in E; cbn [undo_step] in E.
+      cbn [step] in E; rewrite Hn, Hl in E.
       (* The fiber blocking [n] is installed, above [n], and cannot be
          Loading or Active, hence Unloading: contradiction by induction. *)
       assert (Blocked : forall m fm, fibers γ m = Some fm -> Above c (fcomp fm) ->
@@ -447,10 +449,11 @@ Section Progress.
         - exact (NoLoad m fm P acc' w' Hm Hlm).
         - apply (NoLeave m fm acc' w' Hm Hlm); rewrite Ht; discriminate.
         - exact (IH (fcomp fm) HA m fm Hm eq_refl acc' w' z' Hlm). }
-      destruct u as [k p t g|k p|m]; cbn [undo_step] in E.
-      - destruct (binds γ k) as [b|]; [destruct (Nat.eqb (pid b) p)|]; discriminate.
-      - destruct (relied Σ γ n p) eqn:Hr.
-        2: { destruct (binds γ k) as [b|]; [destruct (Nat.eqb (pid b) p)|]; discriminate. }
+      (* No provision still pending in [n]'s accumulator is relied on: the
+         fiber resolving it would be blocking [n]. *)
+      assert (NoRelied : forall k p, In (UProv Σ k p) (u :: acc) ->
+                relied Σ γ n p = true -> False).
+      { intros k p Hu0 Hr.
         unfold relied in Hr; apply existsb_exists in Hr as (m & _ & Hm).
         apply andb_true_iff in Hm as [Hmn Hres].
         apply negb_true_iff, Nat.eqb_neq in Hmn.
@@ -459,7 +462,7 @@ Section Progress.
         apply andb_true_iff in Hres as [Hinst Hex].
         apply existsb_exists in Hex as ([k' p'] & Hin' & Hp'); cbn in Hp'.
         apply Nat.eqb_eq in Hp'; subst p'.
-        assert (Hu : In (UProv Σ k p) (acc_of (life f))) by (rewrite Hl; left; reflexivity).
+        assert (Hu : In (UProv Σ k p) (acc_of (life f))) by (rewrite Hl; exact Hu0).
         destruct (wf_uprov K_eq_dec Σ prog γ W n f k p Hn Hu) as (b0 & Hb0 & Hpb0 & Hob0).
         destruct (wf_view K_eq_dec Σ prog γ W m fm k' p Hfm Hin') as (b1 & Hb1 & Hpb1 & _).
         assert (Hkk : k' = k) by (apply (PU k' k b1 b0 Hb1 Hb0); congruence).
@@ -473,10 +476,21 @@ Section Progress.
           rewrite Hob0, Hn in Ho; injection Ho as <-.
           rewrite <- Hc; apply kmem_In; exact Hko.
         + apply (target_none γ m fm k Hfm Hkd).
-          unfold visible; rewrite Hb0, Hob0, Hn, Hl; reflexivity.
+          unfold visible; rewrite Hb0, Hob0, Hn, Hl; reflexivity. }
+      assert (Hh : held Σ γ n (u :: acc) = false).
+      { destruct (held Σ γ n (u :: acc)) eqn:Hh; [|reflexivity].
+        exfalso; unfold held in Hh; apply existsb_exists in Hh as (u' & Hin & Hu').
+        destruct u' as [k p t g|k p|m]; try discriminate.
+        exact (NoRelied k p Hin Hu'). }
+      rewrite Hh in E.
+      destruct u as [k p t g|k p|m]; cbn [undo_step] in E.
+      - destruct (binds γ k) as [b|]; [destruct (Nat.eqb (pid b) p)|]; discriminate.
+      - destruct (relied Σ γ n p) eqn:Hr.
+        + exact (NoRelied k p (or_introl eq_refl) Hr).
+        + destruct (binds γ k) as [b|]; [destruct (Nat.eqb (pid b) p)|]; discriminate.
       - destruct (fibers γ m) as [fm|] eqn:Hfm; [|discriminate].
         pose proof (QU n (LRetireChild n) ltac:(cbn; tauto)) as E4.
-        cbn [step] in E4; rewrite Hn, Hl, Hfm in E4.
+        cbn [step] in E4; rewrite Hn, Hl, Hfm, Hh in E4; cbn [orb] in E4.
         destruct (disposed fm) eqn:Hd; [|discriminate].
         assert (HA : Above c (fcomp fm)).
         { right; rewrite <- Hc.

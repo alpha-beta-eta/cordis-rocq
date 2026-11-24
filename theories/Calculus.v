@@ -168,6 +168,14 @@ Section Calculus.
   Definition relied (γ : State) (n p : nat) : bool :=
     existsb (fun m => negb (Nat.eqb m n) && resolves γ m p) (names γ).
 
+  (** The guard on unloading: some other installed fiber still resolves a
+      provision whose [UProv] is in [acc]. While it holds, an Unloading
+      fiber undoes nothing, so its dependents tear down against all of its
+      effects (Cordis waits for every dependent before starting any
+      disposer). *)
+  Definition held (γ : State) (n : nat) (acc : list Undo) : bool :=
+    existsb (fun u => match u with UProv _ p => relied γ n p | _ => false end) acc.
+
   Definition has_child (γ : State) (n : nat) : bool :=
     existsb (fun m =>
       match fibers γ m with
@@ -266,7 +274,11 @@ Section Calculus.
           set_life γ1 n f (Loading P' (USpawn m :: acc) w)
     end.
 
-  (** ** One undo item of an Unloading fiber *)
+  (** ** One undo item of an Unloading fiber
+
+      [step] only calls this when [held] is false, which already rules out
+      [relied] for a [UProv] at the head; the check here keeps [undo_step]
+      meaningful on its own. *)
   Definition undo_step (γ : State) (n : nat) (f : Fiber)
       (u : Undo) (acc : list Undo) (w : View) (z : option Err) : option State :=
     let continue γ' := Some (set_life γ' n f (Unloading acc w z)) in
@@ -363,7 +375,8 @@ Section Calculus.
         match fibers γ n with
         | Some f =>
             match life f with
-            | Unloading (u :: acc) w z => undo_step γ n f u acc w z
+            | Unloading (u :: acc) w z =>
+                if held γ n (u :: acc) then None else undo_step γ n f u acc w z
             | _ => None
             end
         | None => None
@@ -372,10 +385,10 @@ Section Calculus.
         match fibers γ n with
         | Some f =>
             match life f with
-            | Unloading (USpawn m :: _) _ _ =>
+            | Unloading (USpawn m :: acc) _ _ =>
                 match fibers γ m with
                 | Some g =>
-                    if disposed g then None
+                    if held γ n (USpawn m :: acc) || disposed g then None
                     else Some (set_fiber γ m (mkFiber (comp g) (parent g) true (life g)))
                 | None => None
                 end
@@ -489,3 +502,14 @@ Arguments LRetireChild {C} n.
 Arguments LUnloaded {C} n.
 Arguments LRemove {C} n.
 Arguments OReact {C} n i.
+
+(** [unheld H]: [H] is a successful [LUndo] or [LRetireChild] step whose
+    guard [held] is in sight; close the blocked case and leave the rest of
+    [H] as it was before the guard, with [Hheld : held .. = false]. *)
+Ltac unheld H :=
+  match type of H with
+  | context [held ?S ?g ?n ?l] =>
+      let E := fresh "Hheld" in
+      destruct (held S g n l) eqn:E;
+      [cbn [orb] in H; discriminate H | cbn [orb] in H]
+  end.

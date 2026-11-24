@@ -366,6 +366,7 @@ Section SpawnConf.
     - (* LUndo *)
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [z|P acc w|acc w|[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       pose proof (sl_nodup _ SL x f Hx) as N; rewrite Hl in N.
       assert (Nt : NoDup (spawns acc) /\ (forall m, u = USpawn Σ m -> ~ In m (spawns acc))).
@@ -779,6 +780,7 @@ Section SpawnConf.
     - (* LUndo *)
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [z|P acc w|acc w|[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       exact (rk_relife γ γ1 x f _ E Hx).
     - (* LRetireChild *)

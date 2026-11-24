@@ -3,7 +3,7 @@
 ;章节, 记号和名字都跟着文章走:
 ;  服务 Σ 带等价关系 ≃; 程序 Prog(d,p) 由构造保证只碰声明过的键; 状态 ⟨next, F, B⟩;
 ;  fiber ⟨c, π, τ, θ⟩; 绑定 ⟨ι, q, s⟩; 视图 ω 是 K ⇀ N 的有限映射;
-;  规则 O-Insert ... L-Remove; 派生概念 installed, visible, target, resolves, quiet, settled.
+;  规则 O-Insert ... L-Remove; 派生概念 installed, visible, target, resolves, held, quiet, settled.
 ;文章的定理在这里变成可以运行的检查:
 ;  保持性 (不变式 WF), 恢复精确性 (影子存储), 进展 (quiet ⇒ settled),
 ;  合流 (规范名下与静态组装一致), 附录A (程序的解释与单独加载一致), 附录B (测试与不可交换).
@@ -206,6 +206,14 @@
   (and (installed? γ m)
        (for/or ([(k ι*) (ω-of (fiber-θ (F γ m)))]) (= ι* ι))))
 
+;held(n, acc) ⟺ ∃ UProv k ι ∈ acc. ∃m ≠ n. resolves(m, ι)
+;卸载的守卫: n 尚未撤回的某个提供仍被别的已安装 fiber 解析
+(define (held? γ n acc)
+  (for/or ([u acc])
+    (match u
+      [(UProv _ ι) (for/or ([m (names γ)]) (and (not (= m n)) (resolves? γ m ι)))]
+      [_ #f])))
+
 ;p(c) 与某个现存 fiber 的 p 相交
 (define (conflict? prog γ c)
   (for/or ([(n f) (state-F γ)])
@@ -318,31 +326,33 @@
             [(Active acc ω)
              (and (not (equal? (target prog γ n) ω)) (θ← γ n (Unloading acc ω #f)))]
             [_ #f]))]
-    ;θ_n = Unloading (u :: acc) ω ζ 且按 u 分的前提成立: θ_n ← Unloading acc ω ζ, 并且 ...
+    ;θ_n = Unloading (u :: acc) ω ζ, ¬held(n, u :: acc), 且按 u 分的前提成立:
+    ;θ_n ← Unloading acc ω ζ, 并且 ...
     [(L-Undo n)
      (and (exists? n)
           (match (θ n)
             [(Unloading (cons u acc) ω ζ)
              (define (continue γ*) (θ← γ* n (Unloading acc ω ζ)))
-             (match u
+             (and
+              (not (held? γ n (cons u acc)))
+              (match u
                ;若绑定 ι 仍在, 把它的状态 s 改为 g(s)
                [(UOp k ι _ g)
                 (match (B γ k)
                   [(binding (== ι) o s) (continue (B← γ k (binding ι o (g s))))]
                   [_ (continue γ)])]
-               ;守卫: 没有 m ≠ n 满足 resolves(m, ι); 删除 B(k)
-               [(UProv k ι)
-                (and (not (for/or ([m (names γ)]) (and (not (= m n)) (resolves? γ m ι))))
-                     (continue (B← γ k #f)))]
+               ;删除 B(k); 由守卫, 没有 m ≠ n 满足 resolves(m, ι)
+               [(UProv k ι) (continue (B← γ k #f))]
                ;要求 m ∉ dom F, 即子fiber已被移除
-               [(USpawn m) (and (not (exists? m)) (continue γ))])]
+               [(USpawn m) (and (not (exists? m)) (continue γ))]))]
             [_ #f]))]
-    ;θ_n = Unloading (USpawn m :: _) _ _, m ∈ dom F 且 ¬τ_m: τ_m ← true
+    ;θ_n = Unloading (USpawn m :: acc) _ _, ¬held(n, USpawn m :: acc), m ∈ dom F 且 ¬τ_m: τ_m ← true
     [(L-RetireChild n)
      (and (exists? n)
           (match (θ n)
-            [(Unloading (cons (USpawn m) _) _ _)
-             (and (exists? m) (not (fiber-τ (F γ m))) (τ← γ m))]
+            [(Unloading (cons (USpawn m) acc) _ _)
+             (and (not (held? γ n (cons (USpawn m) acc)))
+                  (exists? m) (not (fiber-τ (F γ m))) (τ← γ m))]
             [_ #f]))]
     ;θ_n = Unloading [] ω ζ: θ_n ← Inactive ζ
     [(L-Unloaded n)
@@ -682,6 +692,11 @@
 (define components
   (hash
    'core (make-component '() '(tools) (program (serve 'tools (inl (hash))) (Done)))
+   ;提供 tools 之后自己再登记一个条目, 用来检查守卫作用于整个卸载
+   'core+ (make-component '() '(tools)
+                          (program (serve 'tools (inl (hash)))
+                                   ('tools (reg "builtin" "内建"))
+                                   (Done)))
    'shell (make-component '(tools) '()
                           (program ('tools (reg "ls" "列出文件"))
                                    ('tools (reg "cat" "打印文件"))
@@ -757,7 +772,7 @@
   (scene "装 toolkit: 它在加载中 spawn 两个子fiber" (insert 'toolkit))
   (scene "移除 toolkit: L-RetireChild 请 sed-tool 退出, 等它被 L-Remove 后再撤 help, 再到 grep-tool"
          (by 'toolkit O-Dispose))
-  (scene "重启 core: 依赖者先 L-Leave, core 撤 UProv 时等它们 (守卫), 再以新编号提供"
+  (scene "重启 core: 依赖者先 L-Leave, core 在它们卸载完之前什么都不撤 (守卫 held), 再以新编号提供"
          (by 'core O-Restart))
   (scene "装 bad: 第二次 Register 失败, 停在 Inactive(EOp)" (insert 'bad))
   (scene "装 local: 在自己提供的键上操作" (insert 'local))
@@ -828,6 +843,17 @@
                                           (L-Begin 0) (L-Step 0) (L-Step 0) (L-Step 0))))
     (check-true (quiet? Σ prog γ*))
     (check-equal? (tools-of γ*) '("cat" "ls")))
+  ;守卫作用于整个卸载: core+ 在提供之后登记了 builtin; 重启时只要 shell 还解析着 tools,
+  ;core+ 连 builtin 也不撤, shell 卸载时看到的是 core+ 的全部效应
+  (let* ([γ (go (orch init (O-Insert 'core+) (O-Insert 'shell)))]
+         [γ (orch γ (O-Restart 0))])
+    (check-false (step Σ prog γ (L-Undo 0)))
+    (define γ1 (run-labels Σ prog γ (list (L-Leave 1) (L-Undo 1) (L-Undo 1))))
+    (check-equal? (tools-of γ1) '("builtin"))
+    (check-false (step Σ prog γ1 (L-Undo 0)))          ;shell 还没卸载完
+    (define γ2 (run-labels Σ prog γ1 (list (L-Unloaded 1))))
+    (check-true (and (step Σ prog γ2 (L-Undo 0)) #t))
+    (check-equal? (tools-of (go γ2)) '("builtin" "cat" "ls")))
   ;O-Insert 要求不冲突
   (check-false (step Σ prog (orch init (O-Insert 'core)) (O-Insert 'core)))
 

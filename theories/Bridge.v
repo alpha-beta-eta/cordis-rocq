@@ -3,30 +3,31 @@
     Three links between the algebra of §3 (Twisted.v, EffectFun.v,
     Independence.v) and the calculus of §4.
 
-    1. §3.1 read up to ≃, partially (Lemma 38, Definition 37). An effect
+    1. §3.1 read up to ≃, partially (Lemma 38, Definition 36). An effect
        function may fail where a precondition does not hold (the [Maybe]
-       reading of Definition 22). [PWitnessed]: the inverse returns, up to
+       reading of Definition 19). [PWitnessed]: the inverse returns, up to
        ≃, to where the effect was applied, and everything respects ≃. It is
        closed under ⋄ ([pdiamond_witnessed], Theorem 11) and under the
-       composition by outcome of Definition 41 ([pbind_witnessed], equation
+       composition by outcome of Definition 30 ([pbind_witnessed], equation
        (36)). With ≃ the equality and total functions, it is Definition 8
        ([witnessed_total_iff], [pdiamond_total]).
 
     2. The calculus's programs as §3 effect functions ([denote]): an
-       operation is the lift of equation (23), a provision the [set] of
-       Definition 23, and a program the composite of Definition 41. Every
+       operation is the lift of equation (31), a provision the [set] of
+       Definition 20, and a program the composite of Definition 30. Every
        program denotes a witnessed effect function on the store
        ([denote_witnessed]): unloading a component, by itself, recovers the
        store up to ≃. Operations at distinct keys are independent
-       ([distinct_keys], Theorem 40).
+       ([distinct_keys], Theorem 45).
 
-    3. Definition 39 (key commutativity) implies the calculus's hypotheses:
+    3. Definition 44 (key commutativity) implies the calculus's hypotheses:
        revert-independence and commutation ([paper_revert_indep],
        [paper_commute]), hence the bundle [ConfHyps] the generic
        confluence theorem takes ([paper_confhyps]) and the hypothesis of
        recovery exactness ([paper_hind]). The theorems of §4 therefore hold
-       under the paper's own assumption; the calculus asks for less (only
-       pairs that may meet, at distinct tokens). *)
+       under the paper's own assumption (Definition 46 makes every key
+       commutative); the calculus asks for less (only pairs that may meet,
+       at distinct tokens). *)
 
 From Stdlib Require Import List PeanoNat RelationClasses.
 From Cordis Require Import Prelude Twisted EffectFun Service Calculus Recovery ServiceSeq Compose.
@@ -50,7 +51,7 @@ Section Setoid.
     | _, _ => False
     end.
 
-  (** Definition 37, read in [Maybe]. *)
+  (** Definition 36, read in [Maybe]. *)
   Record PWitnessed (e : PEff) : Prop := {
     pw_witness : forall γ δ g, e γ = Some (δ, g) -> g δ ≈ γ;
     pw_inv : forall γ δ g, e γ = Some (δ, g) -> respectsR g;
@@ -101,7 +102,7 @@ Section Setoid.
       transitivity (s (t' x)); [apply (pw_inv _ W2 _ _ _ E2); apply Ht | apply Hs].
   Qed.
 
-  (** Composition by outcome (Definition 41, equation (36)): one stage
+  (** Composition by outcome (Definition 30, equation (32)): one stage
       yields an outcome, and the outcome chooses what follows. *)
   Definition pbind {B} (a : Γ -> option (Γ * End Γ * B)) (k : B -> PEff) : PEff :=
     fun γ => match a γ with
@@ -109,7 +110,7 @@ Section Setoid.
              | None => None
              end.
 
-  (** A stage with an outcome, witnessed and respecting ≃ (Definition 24). *)
+  (** A stage with an outcome, witnessed and respecting ≃ (Definition 29). *)
   Record PWitnessedO {B} (a : Γ -> option (Γ * End Γ * B)) : Prop := {
     po_witness : forall γ δ g o, a γ = Some (δ, g, o) -> g δ ≈ γ;
     po_inv : forall γ δ g o, a γ = Some (δ, g, o) -> respectsR g;
@@ -185,7 +186,7 @@ Section Mediated.
   Context {K : Type} (K_eq_dec : forall x y : K, {x = y} + {x <> y}).
   Context (Σ : Service) {C : Type}.
 
-  (** The coeffect context: a value at each bound key (Definition 22). *)
+  (** The coeffect context: a value at each bound key (Definition 19). *)
   Definition Store : Type := K -> option (St Σ).
 
   Definition seq_opt (o1 o2 : option (St Σ)) : Prop :=
@@ -217,7 +218,7 @@ Section Mediated.
   Lemma supd_other σ k v j : j <> k -> supd σ k v j = σ j.
   Proof. intros H; unfold supd; destruct (K_eq_dec j k); [contradiction | reflexivity]. Qed.
 
-  (** The lift of an operation at [k] (equation (23)): it reads and writes
+  (** The lift of an operation at [k] (equation (31)): it reads and writes
       the binding at [k] alone. *)
   Definition oplift (k : K) (a : Op Σ) (t : nat) (σ : Store) : option (Store * End Store * Out Σ) :=
     match σ k with
@@ -229,7 +230,7 @@ Section Mediated.
     | None => None
     end.
 
-  (** [set] of Definition 23: defined where [k] is unbound; the inverse
+  (** [set] of Definition 20: defined where [k] is unbound; the inverse
       restricts. *)
   Definition setk (k : K) (s : St Σ) (σ : Store) : option (Store * End Store) :=
     match σ k with
@@ -237,10 +238,10 @@ Section Mediated.
     | Some _ => None
     end.
 
-  (** ⟦P⟧: a program read as the composite of Definition 41. As in the
+  (** ⟦P⟧: a program read as the composite of Definition 30. As in the
       calculus, every operation, provision and spawn draws the next number
       from [t]: an operation uses it as its token. Registering a child is
-      not a store effect (Definition 47), so a spawn denotes nothing here
+      not a store effect (Definition 52), so a spawn denotes nothing here
       beyond the number it draws. *)
   Fixpoint denote (P : @Prog K Σ C) (t : nat) : PEff Store :=
     match P with
@@ -303,7 +304,7 @@ Section Mediated.
 
   (** Every program denotes a witnessed effect function: run by itself and
       then reverted, a component leaves the store as it found it, up to ≃
-      (Theorems 11 and 16 with Lemma 38, for Definition 41). *)
+      (Theorems 11 and 16 with Lemma 38, for Definition 30). *)
   Theorem denote_witnessed :
     (forall a t, WellBehaved (Σ := Σ) a t) ->
     forall P t, PWitnessed store_eq (denote P t).
@@ -319,7 +320,7 @@ Section Mediated.
   Lemma store_eq_ext (σ σ' : Store) : (forall j, σ j = σ' j) -> store_eq σ σ'.
   Proof. intros H j; rewrite H; apply seq_opt_refl. Qed.
 
-  (** *** Theorem 40: operations at distinct keys are independent
+  (** *** Theorem 45: operations at distinct keys are independent
 
       A map is local to [k] when it changes no other key and its value at
       [k] depends on the value at [k] alone. The forward map and every
@@ -419,14 +420,14 @@ Section Mediated.
   Qed.
 End Mediated.
 
-(** ** 3. Key commutativity (Definition 39) implies the calculus's hypotheses *)
+(** ** 3. Key commutativity (Definition 44) implies the calculus's hypotheses *)
 Section KeyCommutative.
   Context {Σ : Service}.
   Local Notation V := (St Σ).
 
   (** Operations act on the value at their key alone, so their lifts at one
       key are independent exactly when they are as maps on values. The
-      generators of an operation (Definition 17) are its forward map and
+      generators of an operation (Definition 40) are its forward map and
       the inverses it yields; in the [Maybe] reading the forward map is
       partial. *)
   Definition fwdp (a : Op Σ) (t : nat) (x : V) : option V :=
@@ -446,7 +447,7 @@ Section KeyCommutative.
     (forall x, p x = fwdp a t x) \/ (exists g, yields (Σ := Σ) a t g /\ forall x, p x = Some (g x)).
 
   (** A transformation [q] disturbs neither the definedness, the inverse,
-      nor the outcome of [a] (equations (19) and (35)). *)
+      nor the outcome of [a] (equations (40) and (41)). *)
   Definition Undist (a : Op Σ) (t : nat) (q : V -> option V) : Prop :=
     forall x y, q x = Some y ->
       match run a t x, run a t y with
@@ -455,7 +456,7 @@ Section KeyCommutative.
       | _, _ => False
       end.
 
-  (** Definition 39, for one pair of operations at their tokens. *)
+  (** Definition 44, for one pair of operations at their tokens. *)
   Definition PaperIndep (a : Op Σ) (ta : nat) (b : Op Σ) (tb : nat) : Prop :=
     (forall p q, GenOf a ta p -> GenOf b tb q -> PComm p q) /\
     (forall q, GenOf b tb q -> Undist a ta q) /\
@@ -499,7 +500,7 @@ Section KeyCommutative.
     - exact I.
   Qed.
 
-  (** The bundle the generic confluence theorem takes, from Definition 39 on
+  (** The bundle the generic confluence theorem takes, from Definition 44 on
       the pairs that may meet, together with well-behavedness, uniform
       inverses, and token irrelevance. *)
   Corollary paper_confhyps (G : Op Σ -> Op Σ -> Prop) :
@@ -515,7 +516,7 @@ Section KeyCommutative.
 End KeyCommutative.
 
 (** The hypothesis of recovery exactness ([Recovery.Hind]), from
-    Definition 39 on the pairs two fibers may perform at one key. *)
+    Definition 44 on the pairs two fibers may perform at one key. *)
 Corollary paper_hind {K : Type} {Σ : Service} {C : Type} (prog : C -> @Component K Σ C) :
   (forall k a b ta tb, CoPair Σ prog k a b -> ta <> tb -> PaperIndep a ta b tb) ->
   forall k a b ta tb, CoPair Σ prog k a b -> ta <> tb -> RevertIndep (Σ := Σ) a ta b tb.

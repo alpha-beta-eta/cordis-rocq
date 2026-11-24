@@ -1,6 +1,6 @@
 (** * Confluence (R3, fifth part): the control state
 
-    Counterpart of the paper's Theorem 73, first layer: for components that
+    Counterpart of the paper's Theorem 80, first layer: for components that
     spawn nothing, the control state a system settles at does not depend on
     the schedule. From a common state, any two executions of lifecycle steps
     that end quiet, with no fiber failed, leave the same fibers present, the
@@ -14,7 +14,7 @@
 
     Hypotheses, besides those of Termination.v:
     - no component's program spawns;
-    - totality (the paper's Definition 69): every path of a program that
+    - totality (the paper's Definition 76): every path of a program that
       reaches [Done] provides every key the component may provide. *)
 
 From Stdlib Require Import List PeanoNat Bool Lia Wf_nat.
@@ -214,12 +214,13 @@ Section Confluence.
       apply (pi_relife γ γ); [exact PI | intros; left; assumption | exact Logic.I].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z]; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       apply (pi_relife γ γ1); [exact PI | intros m fm; rewrite E; left; auto | exact Logic.I].
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (disposed g); [discriminate|]; injection H as <-.
+      unheld H; destruct (disposed g); [discriminate|]; injection H as <-.
       intros m fm Hm; apply fibers_set_fiber_inv in Hm as [[-> ->]|[_ Hm]].
       + apply (pi_same_life g); [reflexivity | reflexivity | exact (PI _ g Hg)].
       + exact (PI m fm Hm).
@@ -316,6 +317,7 @@ Section Confluence.
       intros m Hm; apply (NS x f m Hx); rewrite Hl; exact Hm.
     - destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       destruct (undo_step_shape K_eq_dec Σ γ γ' x f u acc w z H) as (γ1 & -> & E).
       apply (ns_relife γ γ1); [exact NS | intros m fm; rewrite E; left; auto |].
       intros m Hm; apply (NS x f m Hx); rewrite Hl; right; exact Hm.

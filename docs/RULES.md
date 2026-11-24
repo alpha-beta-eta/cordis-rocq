@@ -50,7 +50,7 @@ Prog := Done
 ```
 
 - `Prog` 是归纳类型,所以每个程序都有限。程序看不到状态,只能通过操作的结果 `Out`
-  决定下一步(论文 Def 41 的形式),因此限定性(论文 Def 48)由构造保证。
+  决定下一步(论文 Def 30 的形式),因此限定性(论文 Def 55)由构造保证。
 - `Op k`:对服务 `k` 执行操作。`k` 必须是已声明的依赖或自己提供的服务。
 - `Provide k s`:以初始状态 `s` 提供服务 `k`,对应 `ctx.provide`。
 - `Spawn c`:注册子组件,对应 `ctx.plugin`。
@@ -100,7 +100,10 @@ quiet          := ∀ n. 下列之一成立:
                     θₙ = Active _ ω    ∧ target n = ω
                   且不存在可以执行的 L-Remove
 resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
+held n acc     := ∃ UProv k pid ∈ acc. ∃ m ≠ n. resolves m pid
 ```
+
+`held n acc`:`n` 尚未撤回的某个 provision 仍被别的已安装 fiber 解析。它是卸载的守卫,见 4.2。
 
 `visible` 只计入 Active 的 provider,所以 provider 一进入 Unloading,它的服务就对新解析不可见;
 而已经解析到它的依赖者仍持有 ω,可以继续读写,直到自己卸载完毕。
@@ -155,8 +158,8 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
 | 标签 | 前提 | 效果 |
 |---|---|---|
 | `L-Leave n` | `θₙ = Active acc ω`,`target n ≠ ω` | `θₙ := Unloading acc ω None` |
-| `L-Undo n` | `θₙ = Unloading (u :: acc) ω ζ`,且见下方按 `u` 分的前提 | 见下 |
-| `L-RetireChild n` | `θₙ = Unloading (USpawn m :: _) _ _`,`m ∈ dom F`,`τₘ = false` | `τₘ := true` |
+| `L-Undo n` | `θₙ = Unloading (u :: acc) ω ζ`,`¬ held n (u :: acc)`,且见下方按 `u` 分的前提 | 见下 |
+| `L-RetireChild n` | `θₙ = Unloading (USpawn m :: acc) _ _`,`¬ held n (USpawn m :: acc)`,`m ∈ dom F`,`τₘ = false` | `τₘ := true` |
 | `L-Unloaded n` | `θₙ = Unloading [] ω ζ` | `θₙ := Inactive ζ` |
 | `L-Remove n` | `τₙ`,`θₙ = Inactive _`,没有 `m` 满足 `πₘ = n` | 删除 `F n` |
 
@@ -164,11 +167,16 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
 
 - `UOp pid g`:若 `B` 中有该 pid,把它的状态 `s` 改为 `g s`;若绑定已不存在,
   则不做任何事。按不变量,这种情况不会发生。
-- `UProv k pid`:**守卫**:没有 `m ≠ n` 满足 `resolves m pid`。
-  满足时删除 `B k`。这对应 Cordis 中 provide 的 disposer 等待依赖者离开(差异 g)。
+- `UProv k pid`:删除 `B k`。由守卫,此时没有 `m ≠ n` 满足 `resolves m pid`。
 - `USpawn m`:要求 `m ∉ dom F`,即子 fiber 已经被移除。
 
 三种情况的共同效果:`θₙ := Unloading acc ω ζ`。
+
+**守卫** `¬ held` 作用于整个卸载:只要 `n` 还没撤回的任何一个 provision 仍被别的已安装
+fiber 解析,`n` 就既不撤销任何一项,也不请子 fiber 退出。依赖者因此在提供者的全部效应
+(不只是 provision 本身)都还在的状态上完成自己的卸载。这对应 Cordis 的 `_unload`:先等
+全部 provision 的依赖者退出,再启动任何 disposer(差异 g)。不会因此死锁:被等待的依赖者
+秩更高,而提供者一离开 Active,它们的 target 就变了,必然离开。
 
 由此,父 fiber 按 LIFO 撤到 `USpawn m` 时,先用 `L-RetireChild` 请求子 fiber 退出,
 然后**等待**子 fiber 卸载并移除,再继续撤销更早的项(差异 j)。
@@ -180,7 +188,9 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
    这和 Cordis 中"子 fiber 的 dispose 是父 fiber 的一个 disposer"一致,
    而且父 fiber 中晚于 spawn 的效应先撤销。
 2. **卸载逐项进行**(`L-Undo`),不再像论文那样一步应用整个累加器。
-   这样守卫可以精确到每个 provision,`USpawn` 也才能等待子 fiber。
+   这样 `USpawn` 才能等待子 fiber。守卫 `held` 则按 fiber 整体判断(差异 g,同 Cordis):
+   早先的版本把守卫只放在 `UProv` 这一项上,提供者会在依赖者离开之前先撤掉 provide
+   之后的效应,依赖者卸载时看到的是被拆了一部分的服务。
 3. **差异 h**:不保留论文中"让在途迭代落地"的分支。每个 `L-Step` 都是原子的服务操作;
    JS 中的 `await` 只出现在步与步之间,也就是可以 divert 的边界上。
 4. **差异 k**(单独撤销某个效应):用 `O-React` 把每次反应编码为子 fiber,不把 `acc` 改为树。
@@ -215,10 +225,17 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
    - `L-Begin n` 时 `n` 的全部依赖都由 Active 的提供者绑定,`n` 针对恰好这些 provision
      开始加载(`begin_requires_deps`);
    - 提供者比依赖者活得久:依赖者处于已安装状态时,它解析到的每个 provision 都存在、
-     pid 不变,提供者处于已安装状态(`provider_outlives`)。论文中"读到的值不变"在这里
-     没有对应:服务状态按设计是共享且可变的,固定的是 provision 的身份;
+     pid 不变,提供者处于已安装状态(`provider_outlives`)。服务状态按设计是共享且可变的,
+     固定的是 provision 的身份;
+   - 值只被声明或提供该键的 fiber 改变(论文定理 70 的第 3 条):一步之后 pid 不变的绑定,
+     要么值不变,要么是某个声明或提供该键的 fiber 的 `L-Step` 或 `L-Undo` 改了它
+     (`value_moves`)。撤销的情形靠不变式 `Decl`:`UOp` 撤销项只出现在声明或提供其键的
+     fiber 的累加器里(`decl_step`、`decl_reachable`);
    - 撤回 provision 时没有其他已安装 fiber 解析到它(`withdraw_waits`);只要还有,
      撤回就不适用(`withdraw_blocked`);
+   - 更强地,只要提供者尚未撤回的某个 provision 还被别的已安装 fiber 解析,它就不撤销
+     任何一项、也不请子 fiber 退出(`unload_waits`、`unload_blocked`):提供者的全部效应
+     比依赖者活得久;
    - 父 fiber 撤销到 `USpawn m` 时,子 fiber `m` 已被移除(`parent_waits_child`)。
 3. **解析一致**(**已证**,同上):每个 `L-Step n` 都在 `target n = ωₙ` 时执行
    (`step_coherent`);target 变化后,Loading 的 fiber 不能再走一步,而可以中途放弃
@@ -243,7 +260,7 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
      状态可达的特例。
    - 假设:组件间的 `Above` 关系(c 提供了 c' 声明的某个键,或 c 的程序可能 spawn c')没有
      无限上升链,对应论文"≺ 无环且注册有界"。
-   - 唯一可能等待的地方是卸载:等依赖者离开,或等子 fiber 被移除。证明沿 `Above` 做良基归纳。
+   - 唯一可能等待的地方是卸载:等依赖者离开(在撤销任何一项之前),或等子 fiber 被移除。证明沿 `Above` 做良基归纳。
      为此新增两条不变式(`Inv2`,`inv2_step` 证明其保持性):不同绑定的 pid 互不相同;子 fiber
      的组件出现在父组件程序的某个 spawn 中。
    - **终止**(**已证**,`theories/Termination.v`):只执行生命周期规则时步数有限。
@@ -258,7 +275,7 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
      - 新增两条不变式:Loading 的 fiber 剩余程序受剩余步数预算约束(`LoadBound`);撤销
        spawn 的项指向的子 fiber 的父指针指回持有者(`SpawnOwn`)。
 6. **合流**:在相同的编排输入下,任意两次执行到达的 quiet 状态,经名字与 pid 的重命名后相等,
-   而且等于按依赖顺序静态组装的结果。失败是唯一的例外,同论文。分三层:
+   而且等于按依赖顺序静态组装的结果。失败是唯一的例外,同论文(4.4 节 Failure 段)。分三层:
    - **第 1 层:控制状态(已证,`theories/Confluence.v`,限于不 spawn 的组件)。**
      `control_confluence`:从同一个满足不变式的状态出发,任意两次只含生命周期步、终于
      quiet 且没有失败 fiber 的执行,得到相同的 fiber 集合、相同的组件、相同的 Active 集合,
@@ -266,7 +283,7 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
      证明不重排执行:静止状态下 Active 集合满足同一个不动点方程(一个 fiber 是 Active 当且仅当
      它声明的每个键都由某个 Active 的 fiber 提供,`active_iff`),定义域由出发状态确定,而该
      方程只有一个解(`fix_unique`,沿秩归纳)。pid 不同不影响结论,因为比较的是提供者的名字。
-     假设:组件不 spawn(`NoSpawn`);全性(`Total`,论文 Def 69:走到 `Done` 的每条路径都
+     假设:组件不 spawn(`NoSpawn`);全性(`Total`,论文 Def 76:走到 `Done` 的每条路径都
      提供组件声明的每个键)。新增不变式:`ProvideInv`(Loading 的 fiber 已经提供或在每条
      到 `Done` 的路径上都会提供它的键;Active 的 fiber 已经提供全部)、`NoSpawnInv`。
    - **第 2 层:服务状态(已证,`theories/ServiceSeq.v`、`theories/StateInv.v`、`theories/Episode.v`、`theories/StateConf.v`)。**
@@ -319,8 +336,8 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
        提成前提,就得到与执行无关的 `final_agree`:两个终态(`FinalS`),只要根 fiber 按标签
        一一对应、组件相同(`RootsMatch`,标签单射 `RootInj`),就在重命名意义下一致
        (`AgreeL`)。规范名的根部分由标签给出(`CRoot (rt n)`);`spawn_confluence` 取恒等标签。
-   - **第 4 层:编排与生命周期交错(已证,`theories/Dynamic.v`),对应论文定理 73。**
-     前三层比较的是从同一状态出发、只含生命周期步的执行;论文的定理 73 允许编排步穿插其间。
+   - **第 4 层:编排与生命周期交错(已证,`theories/Dynamic.v`),对应论文定理 80。**
+     前三层比较的是从同一状态出发、只含生命周期步的执行;论文的定理 80 允许编排步穿插其间。
      1. **输入按插入序号指称根 fiber**(`Input`:`IIns c`、`IDis i`、`IRestart i`、`IReset i`)。
         根 fiber 的名字取自计数器,而计数器也被生命周期步推进,所以同一输入在不同调度下得到
         不同的名字。执行 `DRun` 从初始状态出发,按顺序消耗输入,其间可以任意插入生命周期步,
@@ -334,9 +351,9 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
         在幸存者中的位置为标签(`slab`)。
         - `dynamic_agree`:两次执行的输入留下相同的幸存组件序列(`scomps`)时,终态在重命名
           意义下一致。两次的输入可以不同,与生命周期步的交错方式也可以不同。
-        - `dynamic_confluence`:输入相同时的特例,即论文定理 73(2)。
+        - `dynamic_confluence`:输入相同时的特例,即论文定理 80(2)。
         - `static_assembly`:任意执行的终态,与"只按原插入顺序各插入一次幸存组件"的执行的
-          终态一致,即论文定理 73(1) 的"等于静态组装"。插入之后,生命周期步按任意顺序进行。
+          终态一致,即论文定理 80(1) 的"等于静态组装"。插入之后,生命周期步按任意顺序进行。
      - 范围:不含 `O-React`;只 dispose 根 fiber(dispose 启动时 spawn 的子 fiber 会破坏
        `SLInv`,见 DESIGN.md 差异 q)。插入时的冲突检查与调度有关:一种调度下插入成功、
        另一种下被拒绝时,后者不构成以这些输入为输入的执行,不在定理范围内。
@@ -344,9 +361,9 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
        不构造那样的执行,只断言终态与静态组装一致。静态组装的执行能否到达无失败的 quiet
        状态,作为前提给出,不另行证明。
 
-## 6′. R4:由服务的可交换性推出插件之间的独立性(§3.2–3.3)
+## 6′. R4:由服务的可交换性推出插件之间的独立性(§3.3–3.4)
 
-论文的定理 40(不同键上的操作天然独立)与定理 42(只在双方都操作的键上需要可交换)在本形式化
+论文的定理 45(不同键上的操作天然独立)与定理 47(只在双方都操作的键上需要可交换)在本形式化
 中的对应:
 
 - **按键、按 fiber 放宽假设。** 恢复(`Recovery.Hind`)与合流(`HRI`、`HCom`)的独立性假设
@@ -361,9 +378,9 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
 - 服务一侧:`Compose.ConfHyps Σ R` 以"可能相遇"的关系 `R` 给出假设,`service_confluence`
   要求 `CoPair` 落在 `R` 内。注册表的 `reg_meet`(`RegistryConf.v`)允许任意注册、任意查询,
   以及注册与查询不同的名字;查询别的 fiber 在同一键上注册的名字仍被排除,因为结果取决于
-  对方是否已注册。论文所说"可交换是提供该键的组件的义务"(第 27 页),在这里就是给出 `R`
+  对方是否已注册。论文所说"可交换是提供该键的组件的义务"(定义 46 之后),在这里就是给出 `R`
   与 `ConfHyps`。
-- **观察等价**(定义 34、引理 35,`Observe.v`):"不可区分"(任意测试结果相同)是所有操作都
+- **观察等价**(定义 31、引理 32,`Observe.v`):"不可区分"(任意测试结果相同)是所有操作都
   尊重的最粗等价(`admissible_indist`、`indist_admissible`);良好服务的 ≃ 都包含于它
   (`wb_indist`)。应用:有序事件总线含分发时,任何合法的 ≃ 都不能让两次注册可交换
   (`bus_no_commute`),所以分发必须留在启动模型之外。监听器模型没有分发,不可区分在那里
@@ -374,31 +391,31 @@ resolves m pid := installed m ∧ ∃ k ∈ d(cₘ). ωₘ k = pid
 演算没有直接使用 §3.1 的 `Twisted`/`Eff`:它的服务操作是部分的,状态按 ≃ 比较,独立性假设是
 操作级的。`Bridge.v` 把两边接起来,分四部分。
 
-1. **§3.1 的 setoid 与部分函数读法**(定义 37、引理 38 的核心)。`PEff Γ := Γ → option (Γ × (Γ → Γ))`,
-   前提不满足时为 `None`(定义 22 所说的 `Maybe` 读法)。`PWitnessed`:逆在应用处按 ≃ 回到原状态,
+1. **§3.1 的 setoid 与部分函数读法**(定义 36、引理 38 的核心)。`PEff Γ := Γ → option (Γ × (Γ → Γ))`,
+   前提不满足时为 `None`(定义 19 所说的 `Maybe` 读法)。`PWitnessed`:逆在应用处按 ≃ 回到原状态,
    逆尊重 ≃,效应本身尊重 ≃(结果与逆都按 ≃ 比较)。
-   - `pdiamond_witnessed`:⋄ 保持见证(定理 11);`pbind_witnessed`:定义 41 中按结果选择后续的
-     组合(式 (36))保持见证;`pdiamonds_witnessed`:序列。
+   - `pdiamond_witnessed`:⋄ 保持见证(定理 11);`pbind_witnessed`:定义 30 中按结果选择后续的
+     组合(式 (32))保持见证;`pdiamonds_witnessed`:序列。
    - `witnessed_total_iff`、`pdiamond_total`:取 ≃ 为相等、函数为全函数时,`PWitnessed` 就是定义 8,
      `pdiamond` 就是 `EffectFun.diamond`。
 2. **`⟦·⟧`:程序作为存储上的效应函数**。存储 `Store := K → option St`,≃ 按定义 33(定义域相同,
-   值相关)。操作按式 (23) 提升(`oplift`:只读写键 k 上的绑定),provide 是定义 23 的 `set`
-   (`setk`:k 未绑定时才有定义,逆为删除),程序按定义 41 组合(`denote`,令牌从 t 起依次取)。
-   spawn 不是存储上的效应(定义 47),解释为空。
+   值相关)。操作按式 (31) 提升(`oplift`:只读写键 k 上的绑定),provide 是定义 20 的 `set`
+   (`setk`:k 未绑定时才有定义,逆为删除),程序按定义 30 组合(`denote`,令牌从 t 起依次取)。
+   spawn 不是存储上的效应(定义 52),解释为空。
    - `denote_witnessed`:操作良好时,每个程序都解释为带见证的效应函数。单独运行再撤销一个组件,
      存储按 ≃ 回到原样,即局部的时间可组合性。
-   - `distinct_keys`(定理 40):操作的前向映射与每个逆都"局限于"它的键(`LocalAt`:不改别的键,
+   - `distinct_keys`(定理 45):操作的前向映射与每个逆都"局限于"它的键(`LocalAt`:不改别的键,
      在本键上的值只取决于本键);局限于不同键的映射可交换,而且互不改变对方的定义域、逆与结果。
-3. **定义 39 推出演算的假设**。`PaperIndep a ta b tb`:两个操作的生成元(前向映射与产出的逆,
-   引理 18(1) 说明在生成元上检查即可)两两可交换(部分映射意义下:两边同时有定义,有定义时 ≃),
-   且每一方的生成元都不改变另一方的定义域、逆与结果(式 (19)、(35))。`Maybe` 读法多出的一点是
+3. **定义 44 推出演算的假设**。`PaperIndep a ta b tb`:两个操作的生成元(前向映射与产出的逆,
+   引理 41(1) 说明在生成元上检查即可)两两可交换(部分映射意义下:两边同时有定义,有定义时 ≃),
+   且每一方的生成元都不改变另一方的定义域、逆与结果(式 (40)、(41))。`Maybe` 读法多出的一点是
    "不改变定义域"。
    - `paper_revert_indep`:推出撤销独立(`RevertIndep`);`paper_commute`:推出可交换(`Commute`)。
-   - `paper_confhyps`:对"可能相遇"的关系 `G` 内、令牌不同的操作对满足定义 39,再加上良好性、
+   - `paper_confhyps`:对"可能相遇"的关系 `G` 内、令牌不同的操作对满足定义 44,再加上良好性、
      `UniformInv`、`TokIrr`,就得到 `ConfHyps Σ G`,于是 `service_confluence` 适用。
      `paper_hind`:同理得到恢复精确性的假设 `Hind`。
-   - 所以 §4 的定理在论文自己的假设下成立。反过来,演算要求的更少:只针对可能相遇的操作对和不同
-     的令牌,不要求一个操作与自己独立。`UniformInv` 与 `TokIrr` 不由定义 39 推出,是额外的服务假设。
+   - 所以 §4 的定理在论文自己的假设下成立(定义 46 让每个键都可交换)。反过来,演算要求的更少:只针对可能相遇的操作对和不同
+     的令牌,不要求一个操作与自己独立。`UniformInv` 与 `TokIrr` 不由定义 44 推出,是额外的服务假设。
 4. **`⟦·⟧` 与步骤的对应**。通过存储投影 `cstore`(每个已绑定键上的服务状态)看:
    - `op_stage`:`L-Step` 执行一个操作,就是对存储施加 `oplift`,并把它产出的逆的底层函数记为
      撤销项 `UOp`;`op_undo`:`L-Undo` 这一项时,只要它当初所在的绑定(pid 相同)还在,就对存储

@@ -1,4 +1,4 @@
-(** * Observational equivalence (§3.3.2: Definition 34, Lemma 35)
+(** * Observational equivalence (§3.3.2: Definition 31, Lemma 32)
 
     An observer of a service state runs operations and reads their
     outcomes. A test is a word of letters: a forward letter runs an
@@ -13,7 +13,7 @@
     an operation may yield maps related states to related states.
 
     - [indist_admissible], [admissible_indist]: indistinguishability is the
-      coarsest admissible equivalence (Lemma 35).
+      coarsest admissible equivalence (Lemma 32).
     - [wb_admissible]: the ≃ of a service whose operations are well behaved
       is admissible, so it is contained in indistinguishability.
     - [bus_no_commute]: on the ordered event bus with dispatch, no

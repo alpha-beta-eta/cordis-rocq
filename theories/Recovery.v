@@ -1,6 +1,6 @@
 (** * Recovery exactness (R3, third part)
 
-    Counterpart of the paper's Theorem 61 and Corollary 62.
+    Counterpart of the paper's Theorem 68 and Corollary 69.
 
     Fix a fiber [n]. Along an execution, maintain a shadow store: every
     other fiber's operations and undos are applied to it, and every binding
@@ -392,6 +392,7 @@ Section Recovery.
     - (* LUndo *)
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       assert (Hrel : forall γ1, next γ1 = next γ -> fibers γ1 = fibers γ ->
                 Prov (set_life Σ γ1 n f (Unloading Σ acc w z))).
       { intros γ1 HN HF; apply (prov_relife γ γ1 n f); auto.
@@ -411,7 +412,7 @@ Section Recovery.
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (Calculus.disposed Σ g); [discriminate|]; injection H as <-.
+      unheld H; destruct (Calculus.disposed Σ g); [discriminate|]; injection H as <-.
       apply (prov_replace γ _ m0 g
                (mkFiber Σ (fcomp g) (Calculus.parent Σ g) true (life g)) PV Hg).
       + cbn; lia.
@@ -1153,6 +1154,7 @@ Section Recovery.
       cbn [step] in H.
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       rewrite (event_LUndo γ x f u acc w z Hx Hl).
       eapply R_undo; eauto.
     - (* LRetireChild *)
@@ -1160,7 +1162,7 @@ Section Recovery.
       destruct (fibers γ x) as [f|] eqn:Hx; [|discriminate].
       destruct (life f) as [| | |[|[k p t g|k p|m0] acc] w z]; try discriminate.
       destruct (fibers γ m0) as [g|] eqn:Hg; [|discriminate].
-      destruct (Calculus.disposed Σ g); [discriminate|]; injection H as <-.
+      unheld H; destruct (Calculus.disposed Σ g); [discriminate|]; injection H as <-.
       apply (R_transfer γ); [intros; reflexivity | | exact HR].
       intros k p; unfold pacc; cbn; unfold fupd.
       destruct (Nat.eqb_spec n m0) as [->|_]; [rewrite Hg|]; reflexivity.

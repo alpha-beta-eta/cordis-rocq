@@ -3,7 +3,7 @@
 ## 1. 目标、范围与原则
 
 - **当前阶段**:在 Rocq 中形式化 dsh(DeepSeek Harness)背后的理论,也就是论文
-  *A Programming Paradigm for Spatiotemporal Composability* 第 3–4 章讲的内容:
+  *A Programming Paradigm for Spatiotemporal Composability*(arXiv:2608.25512v1;本仓库引用的论文编号都按这一版)第 3–4 章讲的内容:
   可撤销效应、反应式余效应,以及动态组合演算和它的元理论。
 - **最终目的**:验证 dsh 插件。因此要求这套理论能对真实插件陈述性质,
   并为将来自动检查插件留出接口。
@@ -41,9 +41,9 @@
 | d | 提供方的可用性谓词 `check` | 有(`reflect.ts:130`)。每次通知依赖者时(`fiber.ts:603` 的 `_checkImpl`)对当前的值求一次;dsh 从不传 check | 新(派生) | 不加规则。若在提供时求值,check 就是程序自己能做的判断:`Derived.provide_checked`(检查通过才 provide)。Cordis 在任意通知时刻对可变的值重新求值,依赖者能否加载就取决于通知的时机,这会破坏合流 | 在提供时求值一次,或者删去(dsh 未使用) |
 | e | 卸载时 disposer 的执行顺序 | `Promise.all` 并发执行(`fiber.ts:720`) | 论文 | 单个 fiber 内部按 LIFO 顺序**串行**执行。后注册的效应往往依赖先注册的效应(例如先建连接池,再在池上注册监听),LIFO 不需要任何额外假设就能保证正确(Thm 16) | 改为串行 LIFO,或者只对声明为独立的效应并发(判据见 D6:逆以任意顺序施加结果都 ≃) |
 | f | 逆(disposer)失败 | 记录日志后吞掉(`fiber.ts:727`) | 新 | 理论中逆是全函数,不会失败。disposer 失败属于越过边界,不在保证范围内 | — |
-| g | 守卫 | 每个 provision 维护 `dependents` 集合(`fiber.ts:716`) | Cordis/论文 | 两者本质相同:按绑定判断"是否仍被依赖" | — |
+| g | 守卫 | 每个 provision 维护 `dependents` 集合(`fiber.ts:716`);卸载先等全部 provision 的依赖者退出,再启动任何 disposer | Cordis | 按绑定判断"是否仍被依赖"(`resolves`),但守卫 `held` 作用于整个卸载:只要还有 provision 被别的已安装 fiber 解析,就不撤销任何一项、不请子 fiber 退出。依赖者因此在提供者的全部效应都还在时完成卸载(`unload_waits`)。早先只在 `UProv` 一项上设守卫,提供者会先撤掉 provide 之后的效应,依赖者看到被拆了一部分的服务 | — |
 | h | 中途放弃加载(divert) | 异步迭代器在每步之间检查是否放弃;同步迭代器一次跑完(`fiber.ts:396`) | 论文 | 每次服务操作是一个原子步,步与步之间都可以放弃。不保留论文中"让在途迭代落地"的分支,因为 JS 的 `await` 只出现在操作之间。允许操作内部 `await` 时改为在线性化点处检查 epoch,见 D6 | — |
-| i | 失败之后 | `update()` 清除错误后可以恢复(`fiber.ts:790`) | Cordis | 增加编排规则 `O-Reset`:把 Inactive(ξ) 变为 Inactive(⊥)。失败后由外部决定是否重试,比论文"永不重入"更实用 | — |
+| i | 失败之后 | `update()` 清除错误后可以恢复(`fiber.ts:790`) | Cordis | 增加编排规则 `O-Reset`:把 Inactive(ξ) 变为 Inactive(⊥)。失败后由外部决定是否重试。论文 4.4 节同样不让失败的 fiber 自行重入,重试要经修订(退役、移除、重新插入);这里给成一条规则 | — |
 | j | 父 fiber 与子 fiber 卸载的先后 | 父 fiber 等待子 fiber 卸载完毕(`fiber.ts:299`) | Cordis | 卸载逐项撤销;撤到 spawn 对应的项时,先请求子 fiber 退出,等它被移除后再继续。拆除顺序因此是结构化的,父子之间不需要独立性假设 | — |
 | k | 单独撤销某个效应 | `ctx.effect` 构成子效应树,每个子效应可以单独撤销(`fiber.ts:421`) | 新 | 组件声明事件处理器 `reacts`;编排规则 `O-React n i` 在 Active 的 `n` 下以子 fiber 运行第 i 个处理器,并在 `n` 的累加器上记一个 `USpawn`。一次反应就是一个运行期效应,单独撤销就是 `O-Dispose` 这个子 fiber,累加器不必改成树。恢复精确性对它成立(`Runtime.effect_exact`),只要求两个 fiber 可能在同一键上做的操作彼此独立(`CoPair`)。合流仍是启动定理,不含 `O-React` | 运行期效应用子 fiber 或 `ctx.effect` 承载,与模型一致 |
 | l | 配置、重启、热更新 | `restart` 增加 revision,使 epoch 改变,fiber 卸载后重新加载(`fiber.ts:768`);`update` 先改配置,再经 `internal/update` waterfall 重启,监听者可以拦下重启(热更新,`fiber.ts:783`) | 新 | 编排规则 `O-Restart n`:未退役的 Loading 或 Active fiber 直接进入 Unloading,之后由已有规则重新加载。不给 target 加 revision。换配置建模为 `O-Dispose` 加 `O-Insert` 新组件,这正是 dsh 的做法(模块版本变化时替换,`client/modules/src/client/entries.ts:233`);dsh 只用同样的配置调用 `fiber.update` 来重试 FAILED 的 fiber,也就是 `O-Reset`。被拦下的热更新不改变生命周期状态 | — |
@@ -67,7 +67,7 @@
 | d | 不变:`_checkImpl` 在通知时求值(`fiber.ts:387`)。check 也可以由 `Service` 子类的 `[Service.check]` 方法给出(`service.ts:35`),上游的 loader 用到了(`loader/src/index.ts:71`) | 结论不变;dsh 两种方式都没有用到 |
 | l | 新增 `registry.replace()`(#266):原地把 fiber 换成新插件,保留 fiber 身份,清除错误、revision 加一后重新加载(`fiber.ts:401`) | 模型用 `O-Dispose` 加 `O-Insert` 编码;合流本来就在重命名意义下成立,所以保留身份不影响结论 |
 | h | 异步迭代器效应在每步之间检查 epoch,改变时调用 `iter.return()` 关闭(#268,`fiber.ts:275`) | 与模型一致:每个操作原子执行,步与步之间可以放弃 |
-| g | 卸载先等全部 provision 的依赖者退出,再启动任何 disposer(`fiber.ts:485`,#196);单个 provide 的 disposer 也等待(`reflect.ts:240`) | 比模型逐项的守卫粗,但同样满足"提供者比依赖者活得久" |
+| g | 卸载先等全部 provision 的依赖者退出,再启动任何 disposer(`fiber.ts:485`,#196);单个 provide 的 disposer 也等待(`reflect.ts:240`) | 模型已改为同样的整体守卫(`held`)。早先模型逐项设守卫,只保证 provision 本身比依赖者活得久,提供者 provide 之后的效应可能先被撤掉;整体守卫保证全部效应都比依赖者活得久 |
 | n | 服务查找在隔离边界停止(#209,`locate`) | 与 `Derived.scoped` 的键重命名一致 |
 | i | 失败的 fiber 只能经 `update()` 或 `replace()` 恢复(`fiber.ts:436`) | 与 `O-Reset` 一致 |
 
@@ -78,7 +78,7 @@
   服务状态被 provider 和依赖者共同操作。
 - **所有跨组件共享的可变状态都是某个服务的状态**,不设单独的环境部分。
 - 组件放在状态之外的程序表里,fiber 只记组件编号。
-- 插件模型 = 服务操作上的程序(论文 Def 41)。程序看不到状态,只能通过操作结果决定下一步,
+- 插件模型 = 服务操作上的程序(论文 Def 30)。程序看不到状态,只能通过操作结果决定下一步,
   限定性由构造保证。
 
 ### D2 程序、注册、累加器
@@ -100,8 +100,8 @@
 - 服务状态从一开始就用 setoid(≃)。
 - 控制字段用严格相等。
 - §3.1 本身(`Twisted.v`、`EffectFun.v`、`Independence.v`)仍用严格相等。`Bridge.v` 给出 setoid
-  与部分函数下的读法(定义 37、引理 38 的核心:⋄ 与按结果的组合保持见证),取 ≃ 为相等、函数为
-  全函数时退回定义 8。定理 20、推论 21 的 setoid 版本没有做:演算的恢复与合流不经过它们,
+  与部分函数下的读法(定义 36、引理 38 的核心:⋄ 与按结果的组合保持见证),取 ≃ 为相等、函数为
+  全函数时退回定义 8。定理 43 的 setoid 版本没有做:演算的恢复与合流不经过它,
   而是直接以操作级的假设证明(`Recovery.v`、`ServiceSeq.v`)。
 
 ### D6 并发与原子性(设计,尚未形式化)
@@ -130,7 +130,7 @@ JS 的 CAS(`Atomics.compareExchange`)只作用于 `SharedArrayBuffer` 上的整�
    和"逐个调用"(之后进行),或让回调发起的操作排队。
 3. 给出的逆满足同样两条。
 
-不用锁:按键串行的异步互斥锁一旦跨 `await` 持有,可能与生命周期的两处等待(`UProv` 守卫、`USpawn`)
+不用锁:按键串行的异步互斥锁一旦跨 `await` 持有,可能与生命周期的两处等待(卸载守卫 `held`、`USpawn`)
 形成演算看不到的死锁。
 
 **能得到什么:精化。** 若每个操作都逻辑原子,真实执行中一个操作在线性化点之前对演算而言"这一步还没走",
@@ -145,7 +145,7 @@ JS 的 CAS(`Atomics.compareExchange`)只作用于 `SharedArrayBuffer` 上的整�
 
 逻辑原子性对服务的和封闭(状态不相交),所以和 `Compose.v` 一样,每个服务可以分开证明。
 
-**在途操作。** 允许操作内部 `await` 之后,论文中被删掉的"在途迭代落地"分支(差异 h)会回来:
+**在途操作。** 允许操作内部 `await` 之后,我们删掉的"在途迭代落地"分支(差异 h,论文 `L-Divert` 的第二种选择)会回来:
 操作 a 在 `await` 时 `target` 改变,fiber `L-Divert` 进入 Unloading;a 随后到达线性化点并提交,
 撤销项却没有进入累加器,效应在卸载后泄漏。采用的修法是**在线性化点处检查 epoch**:提交与
 "这个 fiber 是否已被放弃"的检查在同一个同步片段中,已放弃就返回 `None` 而不提交。演算不用改:
@@ -154,8 +154,8 @@ JS 的 CAS(`Atomics.compareExchange`)只作用于 `SharedArrayBuffer` 上的整�
 Unloading 的累加器),要增加规则并重做证明,不采用。
 
 **运行时一侧:控制层也要原子。** 规则会读写全局的 B 和 F,这些步骤本身必须原子,否则有 TOCTOU 竞态:
-依赖者 `L-Begin` 读到 `visible k = ι`(提供者仍 Active);提供者随即进入 Unloading,撤销 `UProv` 时守卫
-发现还没有 fiber 解析到 ι,删除绑定;依赖者再写入 ω(k) = ι,违反良构性第 4 条。在 Node 中只要每条规则
+依赖者 `L-Begin` 读到 `visible k = ι`(提供者仍 Active);提供者随即进入 Unloading,守卫 `held`
+发现还没有 fiber 解析到 ι,开始撤销并删除绑定;依赖者再写入 ω(k) = ι,违反良构性第 4 条。在 Node 中只要每条规则
 在一个同步片段内完成即可。`L-Step` 不必整步原子:累加器归 fiber 独占,解析出的绑定由
 `provider_outlives` 保证不会被删,所以只有中间那次服务操作需要原子。
 
@@ -195,31 +195,37 @@ Unloading 的累加器),要增加规则并重做证明,不采用。
 
 | 论文 | Rocq | 关系 | 说明 |
 |---|---|---|---|
-| §3.1 定义 1–推论 21 | `Twisted.v`、`EffectFun.v`、`Independence.v` | 忠实 | 严格相等、全函数 |
-| 定义 22–23(余效应上下文,get/set) | `Calculus.v` 的 `binds` 与 `PProvide`;`Bridge.setk` | 改写 | 演算中由绑定承载;`setk` 是定义 23 的 `set` 本身 |
-| 定义 24(键上的余效应) | `Service.v` | 改写 | 全系统一个服务 Σ(多个服务用 `Compose.Sum` 组合);操作多一个令牌参数 |
-| 定义 25–26(规格,notify) | `Calculus.target`、`visible` | 改写 | 分类函数 notify 本身未形式化,由 target 的变化驱动规则 |
-| 定义 27(两种实现) | — | 未做 | |
-| 定义 28–29(isolation) | `Derived.scoped` | 改写 | 键重命名,不设 realm 表;论文的演算同样不含 realm |
-| 定义 30–31(interception) | — | 未做 | 视为传给服务的数据 |
-| 定义 32(Γ∞) | — | 未做 | 演算状态取代 |
-| 定义 33(上下文的 ≃) | `Bridge.store_eq` | 忠实 | |
-| 定义 34、引理 35 | `Observe.v` | 忠实 | 另有 `bus_no_commute` |
-| 定义 36–37、引理 38 | `Bridge.PWitnessed`、`pdiamond_witnessed`、`pbind_witnessed` | 部分 | ⋄ 与式 (36) 已证;定理 20、推论 21 的 ≃ 版未做(演算不经过它们) |
-| 定义 39(键可交换) | `Bridge.PaperIndep` | 改写 | `Maybe` 读法,多"不改对方定义域";只在生成元上要求 |
-| 定理 40 | `Bridge.distinct_keys` | 忠实 | |
-| 定义 41、定理 42 | `Bridge.denote`、`lone_denote`、`paper_confhyps`、`paper_hind` | 改写 | 程序的解释与单独激活一致(`lone_denote`);不经效应函数的独立性(定义 19),直接由定义 39 推出演算的操作级假设 |
-| §4.1–4.3(组件、fiber、十条规则) | `Calculus.v` | 改写 | 重新设计,差异见第 2 节(a、a′、b、e、h、i、j、k、l、q) |
-| 引理 54–57、71、72 | — | 无对应 | 恢复用影子存储,合流用不动点唯一性、理想轨迹与规范名 |
-| 定理 59(保持性) | `Preservation.preservation` | 更强 | 不变式 10 条,论文 4 条 |
-| 定理 61、推论 62(恢复精确性) | `Recovery.recovery_exact`、`Runtime.effect_exact` | 更强 | 只要求可能相遇的操作对撤销独立,不要求前向可交换;覆盖运行期效应 |
-| 定理 63(顺序) | `Ordering.v` | 更弱 | 第 3 条(读到的值不变)有意去掉:服务状态共享可变,固定的是 provision 身份 |
-| 定理 64(解析一致) | `Ordering.step_coherent` 等 | 忠实 | |
-| 定理 66(进展、终止) | `Progress.progress`、`Termination.termination` | 更弱 | 没有定量界 S(n) ≤ (K+4)(V(n)+1);终止要求秩有界 |
-| 引理 68、70(支持集) | `Confluence.fix_unique`、`active_iff` | 部分 | 只在无 spawn 的控制层;有 spawn 时由规范名对应 |
-| 定理 73(1)(规范形) | `Dynamic.static_assembly` | 更弱 | 只断言终态与静态组装一致,不构造按 ⊲ 排列 episode 的执行;静态组装能否无失败地到达 quiet 作为前提 |
-| 定理 73(2)(合流) | `Dynamic.dynamic_confluence`、`dynamic_agree` | 部分 | 编排可任意穿插;不含 `O-React`,只 dispose 根 fiber;`dynamic_agree` 还允许输入不同 |
-| — | `O-Reset`、`O-Restart`、`O-React`;`Runtime.v` | 新增 | 论文没有的规则及其元理论 |
+| §3.1 定义 1–定理 16 | `Twisted.v`、`EffectFun.v` | 忠实 | 严格相等、全函数 |
+| 定义 17–18(效应迭代器) | `Calculus.v` 的 `Prog`;`Bridge.denote` | 改写 | 程序是迭代器的语法形式,每个操作、provide 是一段;解释时读成效应函数 |
+| 定义 19–20(余效应上下文,get/set) | `Calculus.v` 的 `binds` 与 `PProvide`;`Bridge.setk` | 改写 | 演算中由绑定承载;`setk` 是定义 20 的 `set` 本身 |
+| 定义 21–22(规格,notify) | `Calculus.target`、`visible` | 改写 | 分类函数 notify 本身未形式化,由 target 的变化驱动规则 |
+| 定义 23(两种实现) | — | 未做 | |
+| 定义 24–25(isolation) | `Derived.scoped` | 改写 | 键重命名,不设 realm 表;与 4.4 节 Isolation 扩展把键读成 (k, realm) 对是同一思路 |
+| 定义 26–27(interception) | — | 未做 | 视为传给服务的数据 |
+| 定义 28(Γ∞) | — | 未做 | 演算状态取代 |
+| 定义 29(键上的余效应) | `Service.v` | 改写 | 全系统一个服务 Σ(多个服务用 `Compose.Sum` 组合);操作多一个令牌参数;≃ 作为服务的参数给出 |
+| 定义 30(经上下文的迭代器) | `Bridge.denote`、`pbind_witnessed` | 改写 | 按结果选后续(式 (32))读成效应函数上的组合 |
+| 定义 31、引理 32(测试,不可区分) | `Observe.v` | 改写 | 论文把 ≃ₖ 定义为不可区分;这里 ≃ 是参数,证明良好服务的 ≃ 包含于不可区分,不可区分是最粗的容许等价;另有 `bus_no_commute` |
+| 定义 33(上下文的 ≃) | `Bridge.store_eq` | 部分 | 只取 S = K,不设相对于键集的 ≃_S |
+| 定义 34–37、引理 35、38 | `Bridge.PWitnessed`、`pdiamond_witnessed`、`pbind_witnessed` | 部分 | 只取 S = K 的效应函数;⋄ 与按结果的组合保持见证已证 |
+| §3.4.1 定义 40–定理 43(效应独立) | `Independence.v` | 忠实 | 对效应函数陈述(论文对迭代器陈述);严格相等;定理 43 的 ≃ 版未做(演算不经过它) |
+| 定义 44(键可交换) | `Bridge.PaperIndep` | 改写 | `Maybe` 读法,多"不改对方定义域";只在生成元上要求 |
+| 定理 45 | `Bridge.distinct_keys` | 忠实 | |
+| 定义 46(带见证的余效应) | — | 无对应 | 论文要求每个键都可交换;这里只要求可能相遇的操作对的性质(见定理 68 一行) |
+| 定理 47 | `Bridge.lone_denote`、`paper_confhyps`、`paper_hind` | 改写 | 不经迭代器的独立性(定义 42),直接由定义 44 推出演算的操作级假设;程序的解释与单独激活一致(`lone_denote`) |
+| §4.1–4.2(组件、fiber、规则) | `Calculus.v` | 改写 | 重新设计,差异见第 2 节(a、a′、b、e、g、h、i、j、k、l、q) |
+| §4.4(扩展:异步、失败、隔离、配置) | 见右 | 改写 | 异步:差异 h;失败在核心中(`PFail`、Inactive(ξ),差异 a、i);隔离:`Derived.scoped`;配置:`O-Restart`,以及 `O-Dispose` 加 `O-Insert`(差异 l) |
+| 引理 59–62、66、67、78、79 | — | 无对应 | 恢复用影子存储,合流用不动点唯一性、理想轨迹与规范名;不需要"每次执行两两独立"(引理 66) |
+| 定理 64(保持性) | `Preservation.preservation` | 更强 | 不变式 10 条,论文 4 条 |
+| 定理 68、推论 69(恢复精确性) | `Recovery.recovery_exact`、`Runtime.effect_exact` | 更强 | 论文经定义 46 要求每个键可交换;这里只要求可能相遇的操作对撤销独立,不要求前向可交换;覆盖运行期效应 |
+| 定理 70(顺序) | `Ordering.v` | 忠实 | 第 3 条:表项存在(`provider_outlives`),值只被声明或提供该键的 fiber 的操作或其撤销改变(`value_moves`,论文说"声明该键");另有更强的 `unload_waits` |
+| 定理 71(解析一致) | `Ordering.step_coherent` 等 | 忠实 | |
+| 定理 73(进展、终止) | `Progress.progress`、`Termination.termination` | 更弱 | 没有定量界 S(n) ≤ (K+3)(V(n)+1);终止要求秩有界 |
+| 引理 75、77(支持集) | `Confluence.fix_unique`、`active_iff` | 部分 | 只在无 spawn 的控制层;有 spawn 时由规范名对应 |
+| 定理 80(1)(规范形) | `Dynamic.static_assembly` | 更弱 | 只断言终态与静态组装一致,不构造按 ⊲ 排列 episode 的执行;静态组装能否无失败地到达 quiet 作为前提 |
+| 定理 80(2)(合流) | `Dynamic.dynamic_confluence`、`dynamic_agree` | 部分 | 编排可任意穿插;不含 `O-React`,只 dispose 根 fiber;`dynamic_agree` 还允许输入不同 |
+| 4.4 节 Failure、Configuration 段 | `O-Reset`、`O-Restart` | 改写 | 论文中重试与重启是规则的组合(退役、卸载、移除、重新插入);这里各是一条规则 |
+| — | `O-React`;`Runtime.v` | 新增 | 论文没有的规则及其元理论 |
 
 ## 4. 路线
 
@@ -233,7 +239,7 @@ Unloading 的累加器),要增加规则并重做证明,不采用。
 | R4 | §3.2–3.3 的必要部分(已完成):独立性假设按键、按 fiber 放宽(`CoPair`,`Recovery.v`、`ServiceSeq.v` 及合流各部分);观察等价 `Observe.v` |
 | R5 | 运行期效应 k(已完成):`Calculus.v` 的 `O-React`,各元理论文件的对应情形,`Runtime.v` |
 | R6 | 其余暂缓项(已完成):重启 `O-Restart`(`Calculus.v` 及各元理论文件);派生形式 `Derived.v`(isolate、check);r 用"条目即键"编码;o 定为范围外 |
-| R7 | §3 与 §4 的衔接(已完成,`Bridge.v`):§3.1 的 setoid 与部分函数读法;`⟦·⟧` 及其与步骤的对应;定理 40;定义 39 推出演算的独立性假设 |
+| R7 | §3 与 §4 的衔接(已完成,`Bridge.v`):§3.1 的 setoid 与部分函数读法;`⟦·⟧` 及其与步骤的对应;定理 45;定义 44 推出演算的独立性假设 |
 | 以后 | 插件模型的抽取与自动检查;先按 [PLUGIN-AUDIT.md](PLUGIN-AUDIT.md) 扩充模型:可选依赖、交集生命周期的效应、外部持久世界 |
 
 ## 5. 待定问题

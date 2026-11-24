@@ -191,7 +191,15 @@
        (instance-view i)
        (member used-id (hash-values (instance-view i))))])
    (hash->list (manager-instances m))))
-;弹出一项撤销 (L-Undo, 以及USpawn处的L-RetireChild)
+;卸载的守卫 (Rocq中的held): 实例尚未撤回的某个provision仍被别的实例使用.
+;成立时它什么都不撤, 也不请子实例退出, 依赖者因此在它的全部效应都还在时卸载
+;(同Cordis: 先等全部provision的依赖者退出, 再启动任何disposer)
+(define (held? m id i)
+  (for/or ([entry (instance-undo-stack i)])
+    (match entry
+      [(undo-provide _ used-id) (in-use? m id used-id)]
+      [_ #f])))
+;弹出一项撤销 (L-Undo, 以及USpawn处的L-RetireChild); 只在held?不成立时调用
 (define (undo-one! m id i)
   (define provisions
     (manager-provisions m))
@@ -218,8 +226,8 @@
         (format "撤销 ~a (编号 ~a) 上的一次操作 (令牌 ~a)" key used-id tok)])]
     [(cons (undo-provide key used-id) rest)
      (define p (hash-ref provisions key #f))
-     (cond [(in-use? m id used-id) #f]   ; 守卫: 还有依赖者没卸载完, 先等着
-           [(and p (= (provision-id p) used-id))
+     ;由守卫held?, 这时已没有别的实例使用它
+     (cond [(and p (= (provision-id p) used-id))
             (hash-remove! provisions key)
             (set-instance-undo-stack! i rest)
             (format "撤销提供 ~a (编号 ~a)" key used-id)]
@@ -277,7 +285,7 @@
                              "有依赖不可用"))))]
     ['loading (run-instruction! m id i)]
     ['active #f]
-    ['unloading (undo-one! m id i)]))
+    ['unloading (and (not (held? m id i)) (undo-one! m id i))]))
 
 ;;; 服务操作的例子
 
@@ -376,13 +384,15 @@
 (define (print-step id message)
   (printf "  [~a] ~a\n" id message))
 
-;静止时每个实例都安定: 加载失败, 或应当不运行且未运行, 或以正确视图active
+;静止时每个实例都安定: 加载失败, 或应当不运行且未运行, 或以正确视图active;
+;并且没有可以执行的L-Remove (已弃置, inactive, 没有子实例的实例应当已被移除)
 (define (settled? m)
   (for/and ([(id i) (manager-instances m)])
     (define wanted (wanted-view m i))
     (match (instance-phase i)
-      ['inactive (or (instance-failure i) (not wanted)
-                     (and (instance-disposed? i) (has-children? m id)))]
+      ['inactive (and (or (instance-failure i) (not wanted))
+                      (not (and (instance-disposed? i)
+                                (not (has-children? m id)))))]
       ['active (equal? wanted (instance-view i))]
       [_ #f])))
 
@@ -418,6 +428,13 @@
 (define git
   (plugin "git" '(tools) '()
           (prog ('tools (register "git" "版本控制"))
+                (Done))
+          '()))
+;提供 tools 之后自己再登记一个条目
+(define core+
+  (plugin "core+" '() '(tools)
+          (prog (serve 'tools (hash))
+                ('tools (register "builtin" "内建"))
                 (Done))
           '()))
 ;先登记 grep, 再登记已被占用的 ls -> 失败; grep 会被自动撤掉
@@ -555,8 +572,73 @@
   (check-equal? (handlers-of m) 0)
   (check-false (instance-ref m ping2))
 
+  ;; divert: shell 加载到一半时 core 重启, tools 不再可见, shell 中途放弃加载,
+  ;; 撤掉已经登记的 ls, 等 core 重新提供后再从头加载
+  (let ()
+    (define m (make-manager))
+    (define c (install! m core))
+    (define s (install! m shell))
+    (define (step-until! id phase)
+      (let loop ()
+        (unless (eq? (instance-phase (instance-ref m id)) phase)
+          (step! m id)
+          (loop))))
+    (step-until! c 'active)
+    (check-not-false (step! m s))                    ; L-Begin
+    (check-eq? (instance-phase (instance-ref m s)) 'loading)
+    (check-not-false (step! m s))                    ; 登记 ls
+    (check-equal? (tools-of m) '("ls"))
+    (restart! m c)
+    (check-not-false (step! m s))                    ; L-Divert
+    (check-eq? (instance-phase (instance-ref m s)) 'unloading)
+    (check-false (instance-failure (instance-ref m s)))
+    (check-not-false (step! m s))                    ; 撤销 ls
+    (check-equal? (tools-of m) '())
+    (void (settle! m))
+    (check-true (settled? m))
+    (check-equal? (tools-of m) '("cat" "ls")))
+
+  ;; 守卫作用于整个卸载: core+ 在提供之后登记了 builtin; 重启时只要 shell 还在使用 tools,
+  ;; core+ 连 builtin 也不撤, shell 卸载时看到的是 core+ 的全部效应 (同 Cordis)
+  (let ()
+    (define m (make-manager))
+    (define c (install! m core+))
+    (define s (install! m shell))
+    (void (settle! m))
+    (restart! m c)
+    (check-false (step! m c))                        ; 被守卫挡住
+    (check-not-false (step! m s))                    ; shell 开始卸载
+    (check-not-false (step! m s))
+    (check-not-false (step! m s))                    ; 撤掉 cat, ls
+    (check-equal? (tools-of m) '("builtin"))
+    (check-false (step! m c))                        ; shell 还没卸载完
+    (check-not-false (step! m s))                    ; shell -> inactive
+    (check-not-false (step! m c))                    ; 现在才撤 builtin
+    (check-equal? (tools-of m) '())
+    (void (settle! m))
+    (check-true (settled? m))
+    (check-equal? (tools-of m) '("builtin" "cat" "ls")))
+
+  ;; settled?: 已弃置且卸载完毕, 但还没被移除的实例不算安定 (L-Remove 仍可执行)
+  (let ()
+    (define m (make-manager))
+    (void (install! m core))
+    (define g (install! m git))
+    (void (settle! m))
+    (check-true (settled? m))
+    (dispose! m g)
+    (let loop ()
+      (unless (eq? (instance-phase (instance-ref m g)) 'inactive)
+        (step! m g)
+        (loop)))
+    (check-false (settled? m))
+    (check-not-false (step! m g))                    ; L-Remove
+    (check-false (instance-ref m g))
+    (check-true (settled? m)))
+
   ;; 合流: 不同调度顺序得到相同的结果 (实例名和编号可以不同, 比较名字和服务内容)
   ;; 注意例子里没有同名登记, 也没有查询别人登记的名字, 这是注册表满足合流假设的条件
+  ;; 场景含 O-React; 已证的合流定理不覆盖 O-React (RULES 第 5 节第 4 条), 这里只是经验检查
   (define (run-scenario order)
     (define m (make-manager))
     (define messages '())

@@ -1,6 +1,6 @@
 (** * Confluence under interleaved orchestration
 
-    Counterpart of part (2) of the paper's Theorem 73: two executions from
+    Counterpart of part (2) of the paper's Theorem 80: two executions from
     the initial state that take the same orchestration inputs, interleaved
     with lifecycle steps in any way, and end quiet with no failed fiber,
     agree up to renaming ([dynamic_confluence]). Earlier insertions,
@@ -578,7 +578,7 @@ Section Dynamic.
     - exact (ledger_match γ2 γ1 rs2 rs1 ins2 ins1 L2 L1 (eq_sym Es) St2 NF2).
   Qed.
 
-  (** The same inputs, in any interleaving (the paper's Theorem 73(2)). *)
+  (** The same inputs, in any interleaving (the paper's Theorem 80(2)). *)
   Corollary dynamic_confluence ins (γ1 γ2 : State) rs1 rs2 :
     DRun (@init K Σ C) [] ins γ1 rs1 -> DRun (@init K Σ C) [] ins γ2 rs2 ->
     quiet K_eq_dec Σ prog γ1 -> quiet K_eq_dec Σ prog γ2 -> NoFailed Σ γ1 -> NoFailed Σ γ2 ->
@@ -592,7 +592,7 @@ Section Dynamic.
     - intros i; apply live_ix_spec; intros A; apply in_map_iff in A as (c & E & _); discriminate.
   Qed.
 
-  (** ** Static assembly (the paper's Theorem 73(1))
+  (** ** Static assembly (the paper's Theorem 80(1))
 
       Whatever history of insertions, disposals, restarts and resets an
       execution went through, its quiet state agrees with that of an

@@ -31,3 +31,17 @@ theories/Examples/Composed.v
 theories/Derived.v
 theories/Summary.v
 theories/Services/Tiers.v
+theories/Ext/Optional.v
+theories/Ext/OptProgress.v
+theories/Ext/OptConfluence.v
+theories/Ext/OptState.v
+theories/Ext/OptSpawn.v
+theories/Ext/OptDynamic.v
+theories/Ext/OptRecovery.v
+theories/Ext/OptTermination.v
+theories/Ext/Orchestrator.v
+theories/Ext/Intersect.v
+theories/Ext/IntersectLive.v
+theories/Ext/ExtOrdering.v
+theories/Ext/Examples.v
+theories/Ext/ExtSummary.v

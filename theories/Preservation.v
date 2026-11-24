@@ -2,7 +2,7 @@
 
     The well-formedness invariant [WF] holds at the initial state and is
     preserved by every rule. It is the counterpart of the paper's
-    Definition 58 and Theorem 59, adapted to the v1 calculus. *)
+    Definition 63 and Theorem 64, adapted to the v1 calculus. *)
 
 From Stdlib Require Import List PeanoNat Bool Lia.
 From Cordis Require Import Prelude Service Calculus.
@@ -1077,6 +1077,7 @@ Section Preservation.
       cbn [step] in H.
       destruct (fibers γ n) as [f|] eqn:Hn; [|discriminate].
       destruct (life f) as [| | |[|u acc] w z] eqn:Hl; try discriminate.
+      unheld H.
       eapply wf_undo; eauto.
     - eapply wf_LRetireChild; eauto.
     - (* LUnloaded *)

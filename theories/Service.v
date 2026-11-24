@@ -44,7 +44,7 @@ Section Spec.
     | _, _ => False
     end.
 
-  (** ** Well-behaved operations (the paper's Definition 24) *)
+  (** ** Well-behaved operations (the paper's Definition 29) *)
 
   (** The inverse reverts the operation where it was applied. *)
   Definition Witnessed (a : Op Σ) (t : Tok) : Prop :=

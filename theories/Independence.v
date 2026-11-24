@@ -1,4 +1,4 @@
-(** * Independence of effects (§3.1.3) *)
+(** * Independence of effects (§3.4.1, read for effect functions) *)
 
 From Stdlib Require Import List Lia Bool Permutation PeanoNat.
 From Cordis Require Import Prelude Twisted EffectFun.
@@ -38,7 +38,7 @@ Section Generated.
   Definition Commute (A B : End Γ -> Prop) : Prop :=
     forall a b, A a -> B b -> a ∘ b = b ∘ a.
 
-  (** Lemma 18(1): commutation is settled on the generators. *)
+  (** Lemma 41(1): commutation is settled on the generators. *)
   Lemma generated_commute (S T : End Γ -> Prop) :
     Commute S T -> Commute (Generated S) (Generated T).
   Proof.
@@ -61,7 +61,7 @@ Section Generated.
   Qed.
 End Generated.
 
-(** ** The transformation monoid 𝔐(e) (Definition 17) *)
+(** ** The transformation monoid 𝔐(e) (Definition 40) *)
 Section TransformationMonoid.
   Context {Γ : Type}.
 
@@ -96,7 +96,7 @@ Section TransformationMonoid.
     Gen (induced p) h -> h = fst p \/ h = snd p.
   Proof. intros [-> | [γ' ->]]; [left | right]; reflexivity. Qed.
 
-  (** Lemma 18(2), in the form of the notes: 𝔐(e₁ ⋄ e₂) ⊆ ⟨Gen e₁ ∪ Gen e₂⟩. *)
+  (** Lemma 41(2), in the form of the notes: 𝔐(e₁ ⋄ e₂) ⊆ ⟨Gen e₁ ∪ Gen e₂⟩. *)
   Lemma M_diamond_gen (e1 e2 : Eff Γ) h :
     M (e1 ⋄ e2) h -> Generated (fun h => Gen e1 h \/ Gen e2 h) h.
   Proof.
@@ -111,7 +111,7 @@ Section TransformationMonoid.
       + left; right; exists (fst (e2 γ)); reflexivity.
   Qed.
 
-  (** Lemma 18(2), in the form of the paper: 𝔐(e₁ ⋄ e₂) ⊆ ⟨𝔐(e₁) ∪ 𝔐(e₂)⟩. *)
+  (** Lemma 41(2), in the form of the paper: 𝔐(e₁ ⋄ e₂) ⊆ ⟨𝔐(e₁) ∪ 𝔐(e₂)⟩. *)
   Lemma M_diamond (e1 e2 : Eff Γ) h :
     M (e1 ⋄ e2) h -> Generated (fun h => M e1 h \/ M e2 h) h.
   Proof.
@@ -120,7 +120,7 @@ Section TransformationMonoid.
     - apply M_diamond_gen; exact H.
   Qed.
 
-  (** ** Independence (Definition 19) *)
+  (** ** Independence (Definition 42) *)
   Definition Independent (e1 e2 : Eff Γ) : Prop :=
     Commute (M e1) (M e2) /\
     (forall g γ, M e2 g -> snd (e1 (g γ)) = snd (e1 γ)) /\
@@ -196,7 +196,7 @@ Section Sequence.
     apply H; exact HM.
   Qed.
 
-  (** *** Theorem 20
+  (** *** Theorem 43, claims (1) and (2) of the proof
       Fix j and write [st' k] for the state reached from [st j] by
       e_{j+1}, …, e_{j+k}, i.e. the sequence with eⱼ omitted. (In the
       notes' 1-based indexing, γ'ᵤ is [st' (u - j)].) *)
@@ -245,11 +245,11 @@ Section Sequence.
     Qed.
   End Omit.
 
-  (** *** Corollary 21
+  (** *** Theorem 43
       Applying the n inverses at [st n], in the order of any permutation of
       {0, …, n-1}, reaches γ₀.
 
-      The proof generalises Theorem 20 from omitting one effect to omitting
+      The proof generalises claims (1) and (2) from omitting one effect to omitting
       any set R of them: [stR R i] is the state reached by e₀, …, eᵢ₋₁ with
       those in R skipped. Running inv j at [stR R n] omits j as well. *)
   Hypothesis Hw : forall i, i < n -> Witnessed (e i).
