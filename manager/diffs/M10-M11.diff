@@ -1,5 +1,5 @@
---- M10.rkt	2026-11-25 03:28:48.810636100 +0800
-+++ M11.rkt	2026-11-25 03:28:48.810636100 +0800
+--- M10.rkt	2026-11-25 22:37:10.958387900 +0800
++++ M11.rkt	2026-11-25 22:38:54.175766800 +0800
 @@ -1,16 +1,20 @@
  #lang racket
 -;渐进的插件管理器, 第10层: 配置.
@@ -16,7 +16,7 @@
 -;  那样旧配置下做的事留在原处, 不经撤销, 不在本模型的保证之内.
 -;留给下一层的问题: 子插件读不到父插件提供的服务, 除非也声明依赖; 事件只有登记, 没有分发.
 +;本层新增三件事, 都是 Cordis 的 ctx 作用域带来的:
-+;  1. 沿父链查找服务 (Cordis: locate): 子实例不声明依赖, 也能用祖先实例提供的服务.
++;  1. 沿父链查找服务 (Cordis: locate): 子实例不声明依赖, 也能用祖先实例提供的服务, 或祖先声明依赖的服务 (逐层先看视图, 再看提供).
 +;     父实例先提供, 再装子实例时这是安全的: 父实例按 LIFO 卸载, 子实例在服务撤回之前就退出了.
 +;     反过来 (先装子实例, 再提供) 时, 服务先于子实例撤回, 子实例的撤销被跳过 ——
 +;     这就是 docs/DESIGN.md 2.1 节 e 所说的、上游 Cordis 由测试确认的问题.
@@ -44,7 +44,7 @@
  ;把 apply 变成程序: 运行到第一次 ctx 调用为止. apply 可以拿 (ctx) 或 (ctx config)
  ;抛出的任何值都是加载失败; 只有用户中断 (break) 照常传出去
  (define (apply->program apply c)
-@@ -57,22 +61,27 @@
+@@ -65,22 +69,27 @@
  ;在服务key上执行操作, 返回操作的结果 (Cordis: ctx.<服务>.<方法>(...))
  (define (ctx-use c key operation)
    (check-in-apply 'ctx-use c)
@@ -80,7 +80,7 @@
  
  ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
  ;构造时reacts可以省略, 默认没有事件处理器
-@@ -87,6 +96,28 @@
+@@ -95,6 +104,28 @@
  (define (check-config who plug config)
    (unless ((plugin-schema plug) config)
      (error who "插件 ~a 的配置不合法: ~a" (plugin-name plug) config)))
@@ -109,26 +109,48 @@
  ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
  ;remaining 是剩余需要执行的程序;
  ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
-@@ -199,8 +230,16 @@
-      (and (number? expected-id)
-           (= expected-id (provision-id p))
-           p)]
+@@ -196,19 +227,29 @@
+   id)
+ ;检查实例是否能够访问相应服务
+ ;如果可以就返回对应的provision
++;沿父链逐层查找 (Cordis: locate 逐层查 committed 与 provisions): 每一层先看视图, 再看是否自己提供;
++;两样都没有就到父实例那一层. 所以子实例能用祖先声明依赖的服务, 也能用祖先提供的服务.
++;隔离不会被穿过: isolate 改名的是整棵子树里的键, 改名后的键在外层实例的视图和提供里都找不到
+ (define (resolve m id i key)
+   (define p (provision-ref m key))
+-  (cond
+-    [(not p) #f]
+-    ;情况1: 比较视图中记录的编号和当前编号 (必需依赖, 以及在场的可选依赖)
+-    [(hash-has-key? (instance-view i) key)
+-     (define expected-id
+-       (hash-ref (instance-view i) key #f))
+-     (and (number? expected-id)
+-          (= expected-id (provision-id p))
+-          p)]
 -    ;情况2: 检查是否为自己提供
 -    [else (and (= (provision-owner p) id) p)]))
-+    ;情况2: 自己或某个祖先实例提供的 (沿父链查找, Cordis: locate)
-+    [else (and (ancestor-or-self? m id (provision-owner p)) p)]))
-+;owner 是 id 自己, 或 id 的某个祖先实例
-+(define (ancestor-or-self? m id owner)
-+  (let loop ([id id])
-+    (cond [(not id) #f]
-+          [(= id owner) #t]
-+          [else (loop (match (instance-ref m id)
-+                        [#f #f]
-+                        [i (instance-parent i)]))])))
++  (and
++   p
++   (let loop ([id id] [i i])
++     (cond
++       ;情况1: 视图中有这个键 (必需依赖, 以及在场的可选依赖): 比较视图中记录的编号和当前编号
++       [(and (instance-view i) (hash-has-key? (instance-view i) key))
++        (define expected-id
++          (hash-ref (instance-view i) key #f))
++        (and (number? expected-id)
++             (= expected-id (provision-id p))
++             p)]
++       ;情况2: 这一层的实例自己提供的
++       [(= (provision-owner p) id) p]
++       ;情况3: 到父实例那一层
++       [else
++        (define parent-id (instance-parent i))
++        (define parent (and parent-id (instance-ref m parent-id)))
++        (and parent (loop parent-id parent))]))))
  
  ;运行实例的剩余程序一步; 返回描述
  (define (run-instruction! m id i)
-@@ -349,7 +388,7 @@
+@@ -359,7 +400,7 @@
              ;apply 拿到的 ctx 记下在场集, 由 ctx-has? 选变体
              (set-instance-remaining!
               i (apply->program (plugin-apply (instance-plugin i))
@@ -137,7 +159,7 @@
              (set-instance-undo-stack! i '())
              (set-instance-view! i wanted)
              (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
-@@ -425,11 +464,13 @@
+@@ -436,11 +477,13 @@
          (hash-set state name value)
          (λ (state) (hash-remove state name))
          'ok)))
@@ -154,7 +176,7 @@
     (λ (state) (hash-remove state tok))
     tok))
  
-@@ -532,13 +573,25 @@
+@@ -543,13 +586,25 @@
    (trace id (format "实例 ~a 作出反应: 子实例 ~a (插件 ~a)" id child-id (plugin-name child)))
    child-id)
  
@@ -186,7 +208,7 @@
  
  (define (print-step id message)
    (printf "  [~a] ~a\n" id message))
-@@ -561,7 +614,9 @@
+@@ -572,7 +627,9 @@
      (printf " ~a[编号~a, 由#~a提供]=~a" key (provision-id p) (provision-owner p)
              (case key
                [(tools) (sort (hash-keys (provision-state p)) string<?)]
@@ -197,7 +219,7 @@
                [else (state-of m key)])))
    (newline))
  
-@@ -665,6 +720,32 @@
+@@ -676,6 +733,32 @@
            (λ (ctx) (void))
            (list restrict)))
  
@@ -230,7 +252,7 @@
  ;alias 按配置登记一个别名; 配置是 (名字 . 指向), 名字必须是字符串
  (define alias
    (plugin "alias" '(tools) '()
-@@ -754,7 +835,18 @@
+@@ -765,7 +848,18 @@
    (scene "update! alias 回 ll -> ls -l: 失败清除, 按新配置重试"
           (λ () (update! m (hash-ref ids 'alias) '("ll" . "ls -l") #:trace print-step)))
    (scene "replace! 把 git2 的实例原地换回 git: 编号不变"
@@ -250,7 +272,7 @@
  
  (module+ test
    (require rackunit
-@@ -1233,6 +1325,81 @@
+@@ -1260,6 +1354,111 @@
      (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
      (check-true (settled? m)))
  
@@ -271,6 +293,36 @@
 +    (void (install! m workspace))
 +    (define e (install! m editor))
 +    (check-equal? (instance-failure (instance-ref m e)) "实例无法访问服务 files"))
++  ;; 沿父链查找也看祖先的视图: 父实例声明依赖 tools, 子实例不声明也能用
++  (let* ([m (make-manager)]
++         [c (install! m core)]
++         [child (plugin "child" '() '()
++                        (λ (ctx) (ctx-use ctx 'tools (register "child-tool" "子插件的工具"))))]
++         [parent (plugin "parent" '(tools) '()
++                         (λ (ctx) (ctx-plugin ctx child)))]
++         [p (install! m parent)])
++    (check-eq? (instance-phase (instance-ref m p)) 'active)
++    (check-equal? (tools-of m) '("child-tool"))
++    (check-true (for/and ([(id i) (manager-instances m)]) (eq? (instance-phase i) 'active)))
++    ;; 提供者重启: 父实例的视图过期, 先请子实例退出, 再跟着重新加载
++    (restart! m c)
++    (check-equal? (tools-of m) '("child-tool"))
++    (check-true (for/and ([(id i) (manager-instances m)]) (eq? (instance-phase i) 'active)))
++    (dispose! m p)
++    (check-equal? (tools-of m) '()))
++  ;; 隔离边界不被穿过: 改名后的键在父实例的视图里找不到
++  (let* ([m (make-manager)]
++         [child (plugin "child" '() '()
++                        (λ (ctx) (ctx-use ctx 'tools (register "child-tool" "子插件的工具"))))]
++         [parent (plugin "parent" '(tools) '()
++                         (λ (ctx) (ctx-plugin ctx (isolate child 'tools "sandbox"))))])
++    (void (install! m core))
++    (void (install! m parent))
++    (check-equal? (tools-of m) '())
++    (check-not-false
++     (for/first ([(id i) (manager-instances m)]
++                 #:when (equal? (instance-failure i) "实例无法访问服务 (tools . sandbox)"))
++       i)))
 +  ;; 先装子实例再提供: 父实例按 LIFO 先撤回 files, 子实例的撤销被跳过
 +  (let ([m (make-manager)] [messages '()])
 +    (define w (install! m workspace/bad))

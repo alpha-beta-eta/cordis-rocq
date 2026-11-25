@@ -54,7 +54,15 @@
             (apply c))
         (Done)))))
 (define (raised->why e)
-  (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
+  (format "apply 抛出异常: ~a" (raised-message e)))
+(define (raised-message e)
+  (if (exn? e) (exn-message e) e))
+;服务操作抛出的值 (不同于返回 #f 的拒绝). 与 apply 抛出一样算加载失败, 已做的撤掉;
+;只有用户中断 (break) 照常传出去
+(struct Raised (message))
+(define (run-operation operation tok state)
+  (with-handlers ([(λ (e) (not (exn:break? e))) (λ (e) (Raised (raised-message e)))])
+    (operation tok state)))
 ;当前正在运行的是哪次加载的 apply
 (define load-key (make-continuation-mark-key 'load))
 (define (check-in-apply who c)
@@ -242,27 +250,29 @@
   id)
 ;检查实例是否能够访问相应服务
 ;如果可以就返回对应的provision
+;沿父链逐层查找 (Cordis: locate 逐层查 committed 与 provisions): 每一层先看视图, 再看是否自己提供;
+;两样都没有就到父实例那一层. 所以子实例能用祖先声明依赖的服务, 也能用祖先提供的服务.
+;隔离不会被穿过: isolate 改名的是整棵子树里的键, 改名后的键在外层实例的视图和提供里都找不到
 (define (resolve m id i key)
   (define p (provision-ref m key))
-  (cond
-    [(not p) #f]
-    ;情况1: 比较视图中记录的编号和当前编号 (必需依赖, 以及在场的可选依赖)
-    [(hash-has-key? (instance-view i) key)
-     (define expected-id
-       (hash-ref (instance-view i) key #f))
-     (and (number? expected-id)
-          (= expected-id (provision-id p))
-          p)]
-    ;情况2: 自己或某个祖先实例提供的 (沿父链查找, Cordis: locate)
-    [else (and (ancestor-or-self? m id (provision-owner p)) p)]))
-;owner 是 id 自己, 或 id 的某个祖先实例
-(define (ancestor-or-self? m id owner)
-  (let loop ([id id])
-    (cond [(not id) #f]
-          [(= id owner) #t]
-          [else (loop (match (instance-ref m id)
-                        [#f #f]
-                        [i (instance-parent i)]))])))
+  (and
+   p
+   (let loop ([id id] [i i])
+     (cond
+       ;情况1: 视图中有这个键 (必需依赖, 以及在场的可选依赖): 比较视图中记录的编号和当前编号
+       [(and (instance-view i) (hash-has-key? (instance-view i) key))
+        (define expected-id
+          (hash-ref (instance-view i) key #f))
+        (and (number? expected-id)
+             (= expected-id (provision-id p))
+             p)]
+       ;情况2: 这一层的实例自己提供的
+       [(= (provision-owner p) id) p]
+       ;情况3: 到父实例那一层
+       [else
+        (define parent-id (instance-parent i))
+        (define parent (and parent-id (instance-ref m parent-id)))
+        (and parent (loop parent-id parent))]))))
 
 ;运行实例的剩余程序一步; 返回描述
 (define (run-instruction! m id i)
@@ -281,14 +291,16 @@
         (define pid (provision-id p))
         ;操作失败时令牌也已用掉
         (define tok (fresh-id! m))
-        (match (operation tok (provision-state p))
+        (match (run-operation operation tok (provision-state p))
           [(op-result new-state undo value)
            (set-provision-state! p new-state)
            (push-undo! (undo-op key pid tok undo) i)
            (set-instance-remaining! i (cont value))
            (format "在 ~a (编号 ~a) 上执行操作 (令牌 ~a), 结果 ~a"
                    key pid tok value)]
-          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)])])]
+          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)]
+          [(Raised why)
+           (fail! (format "~a (编号 ~a) 上的操作抛出异常: ~a" key pid why) i)])])]
     [(Provide key init next)
      (cond [(not (member key (instance-provides i)))
             (fail! (format "~a 不在声明的 provides ~a 中"
@@ -375,7 +387,7 @@
                  (instance-failure i))
          "卸载完毕 -> inactive")]
     [(cons (undo-op key used-id tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (define p (hash-ref provisions key #f))
      (set-instance-undo-stack! i rest)
      (cond
@@ -449,6 +461,7 @@
                         (format ", 在场的可选依赖: ~a" present)))]
            [else #f])]
     ;视图过期时开始卸载; 加载到一半时也一样 (中途改道), 已经走完的那一步留在撤销栈里
+    ;总是立即改道. 演算还允许视图过期后让在途的步骤落地 (差异 h), 这里只取立即改道这一种调度
     [(or 'loading 'active)
      #:when (not (equal? wanted (instance-view i)))
      (set-instance-phase! i 'unloading)
@@ -1319,6 +1332,22 @@
     (check-eq? (instance-phase (instance-ref m thrower)) 'inactive)
     (check-equal? (tools-of m) '()))
 
+  ;; 服务操作抛出异常 (不是返回 #f 的拒绝): 同样是加载失败, 已做的撤掉; 不逃出 settle!
+  (let ([m (make-manager)])
+    (void (install! m core))
+    (define boom (λ (tok state) (error 'boom "服务出错")))
+    (define user
+      (install! m (plugin "user" '(tools) '()
+                          (λ (ctx)
+                            (ctx-use ctx 'tools (register "leftover" 1))
+                            (ctx-use ctx 'tools boom)))))
+    (check-eq? (instance-phase (instance-ref m user)) 'inactive)
+    (check-equal? (instance-failure (instance-ref m user))
+                  (format "tools (编号 ~a) 上的操作抛出异常: boom: 服务出错"
+                          (provision-id (provision-ref m 'tools))))
+    (check-equal? (tools-of m) '())
+    (check-not-exn (λ () (settle! m))))
+
   ;; ctx-provide 和 ctx-plugin 也是 await 点: 它们之后的代码在指令执行之后才运行
   (let ([m (make-manager)] [log '()])
     (define s
@@ -1515,6 +1544,36 @@
     (void (install! m workspace))
     (define e (install! m editor))
     (check-equal? (instance-failure (instance-ref m e)) "实例无法访问服务 files"))
+  ;; 沿父链查找也看祖先的视图: 父实例声明依赖 tools, 子实例不声明也能用
+  (let* ([m (make-manager)]
+         [c (install! m core)]
+         [child (plugin "child" '() '()
+                        (λ (ctx) (ctx-use ctx 'tools (register "child-tool" "子插件的工具"))))]
+         [parent (plugin "parent" '(tools) '()
+                         (λ (ctx) (ctx-plugin ctx child)))]
+         [p (install! m parent)])
+    (check-eq? (instance-phase (instance-ref m p)) 'active)
+    (check-equal? (tools-of m) '("child-tool"))
+    (check-true (for/and ([(id i) (manager-instances m)]) (eq? (instance-phase i) 'active)))
+    ;; 提供者重启: 父实例的视图过期, 先请子实例退出, 再跟着重新加载
+    (restart! m c)
+    (check-equal? (tools-of m) '("child-tool"))
+    (check-true (for/and ([(id i) (manager-instances m)]) (eq? (instance-phase i) 'active)))
+    (dispose! m p)
+    (check-equal? (tools-of m) '()))
+  ;; 隔离边界不被穿过: 改名后的键在父实例的视图里找不到
+  (let* ([m (make-manager)]
+         [child (plugin "child" '() '()
+                        (λ (ctx) (ctx-use ctx 'tools (register "child-tool" "子插件的工具"))))]
+         [parent (plugin "parent" '(tools) '()
+                         (λ (ctx) (ctx-plugin ctx (isolate child 'tools "sandbox"))))])
+    (void (install! m core))
+    (void (install! m parent))
+    (check-equal? (tools-of m) '())
+    (check-not-false
+     (for/first ([(id i) (manager-instances m)]
+                 #:when (equal? (instance-failure i) "实例无法访问服务 (tools . sandbox)"))
+       i)))
   ;; 先装子实例再提供: 父实例按 LIFO 先撤回 files, 子实例的撤销被跳过
   (let ([m (make-manager)] [messages '()])
     (define w (install! m workspace/bad))

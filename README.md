@@ -21,6 +21,11 @@ of dsh plugins; plugins' business logic is out of scope.
   lifecycle call sequences, and reports the shortest sequences that break a tier of the summary
   theorem; first-round report on the 26 audited plugins in [checker/REPORT.md](checker/REPORT.md),
   per-plugin details in [checker/FINDINGS.md](checker/FINDINGS.md).
+- [difftest/](difftest/): differential testing of the calculus against Cordis. Plugins generated from
+  one specification run on the real Cordis (dsh's vendored copy and upstream); every lifecycle event is
+  replayed on `step` extracted from `Calculus.v`, and the states are compared. About 270 000 orchestration
+  scripts; the only divergences are differences c (insert-time conflicts) and e (concurrent disposers),
+  each with a three-step witness. A first step toward the refinement of DESIGN D6.
 - [layers/](layers/): the calculus presented in seven Racket layers (services, lifecycle,
   dependencies, confluence, spawn, reactions, orchestration), each a self-contained file that
   adds one concept, with runnable checks of what the layer earns and diffs between layers.

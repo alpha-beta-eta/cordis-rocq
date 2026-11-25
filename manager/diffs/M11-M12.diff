@@ -1,12 +1,12 @@
---- M11.rkt	2026-11-25 03:28:48.810636100 +0800
-+++ M12.rkt	2026-11-25 03:28:48.810636100 +0800
+--- M11.rkt	2026-11-25 22:38:54.175766800 +0800
++++ M12.rkt	2026-11-25 22:38:54.183578200 +0800
 @@ -1,20 +1,19 @@
  #lang racket
 -;渐进的插件管理器, 第11层: 作用域与事件.
 +;渐进的插件管理器, 第12层: 去掉纪律.
  ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
 -;本层新增三件事, 都是 Cordis 的 ctx 作用域带来的:
--;  1. 沿父链查找服务 (Cordis: locate): 子实例不声明依赖, 也能用祖先实例提供的服务.
+-;  1. 沿父链查找服务 (Cordis: locate): 子实例不声明依赖, 也能用祖先实例提供的服务, 或祖先声明依赖的服务 (逐层先看视图, 再看提供).
 -;     父实例先提供, 再装子实例时这是安全的: 父实例按 LIFO 卸载, 子实例在服务撤回之前就退出了.
 -;     反过来 (先装子实例, 再提供) 时, 服务先于子实例撤回, 子实例的撤销被跳过 ——
 -;     这就是 docs/DESIGN.md 2.1 节 e 所说的、上游 Cordis 由测试确认的问题.
@@ -46,7 +46,7 @@
  (struct Done ())
  (struct Fail (why))
  
-@@ -82,6 +85,21 @@
+@@ -90,6 +93,21 @@
  ;prepend 为真时排在不 prepend 的处理器前面
  (define (ctx-on c event handler #:prepend [prepend #f])
    (ctx-use c 'events (on event handler #:prepend prepend)))
@@ -68,7 +68,7 @@
  
  ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
  ;构造时reacts可以省略, 默认没有事件处理器
-@@ -145,16 +163,21 @@
+@@ -153,16 +171,21 @@
  (struct undo-provide (key used-id))
  ;安装过子实例child-id
  (struct undo-spawn (child-id))
@@ -93,7 +93,7 @@
  (define (fresh-id! m)
    (define id (manager-next-id m))
    (set-manager-next-id! m (add1 id))
-@@ -293,7 +316,22 @@
+@@ -305,7 +328,22 @@
              (define child-id (add-instance! m child id config))
              (push-undo! (undo-spawn child-id) i)
              (set-instance-remaining! i (next (void)))
@@ -117,7 +117,7 @@
  
  ;检查编号为used-id的provision是否仍被其他实例使用
  (define (in-use? m self-id used-id)
-@@ -322,6 +360,13 @@
+@@ -334,6 +372,13 @@
  (define (undo-one! m i)
    (define provisions
      (manager-provisions m))
@@ -131,7 +131,7 @@
    (match (instance-undo-stack i)
      ['()
       (set-instance-phase! i 'inactive)
-@@ -353,6 +398,12 @@
+@@ -365,6 +410,12 @@
             [else
              (set-instance-undo-stack! i rest)
              (format "跳过撤销提供: ~a (编号 ~a) 已不存在" key used-id)])]
@@ -144,7 +144,7 @@
      [(cons (undo-spawn child-id) rest)
       ;; 先请子实例退出, 等它真的被移除了再弹出这一项
       (define child (instance-ref m child-id))
-@@ -746,6 +797,56 @@
+@@ -759,6 +810,56 @@
    (plugin "ask-user" '(events) '()
            (λ (ctx) (ctx-on ctx "approval" ask #:prepend #t))))
  
@@ -201,7 +201,7 @@
  ;alias 按配置登记一个别名; 配置是 (名字 . 指向), 名字必须是字符串
  (define alias
    (plugin "alias" '(tools) '()
-@@ -846,7 +947,17 @@
+@@ -859,7 +960,17 @@
    (scene "装 auto-approve 和 ask-user, 分发审批请求"
           (λ () (install 'auto-approve auto-approve)
                 (install 'ask-user ask-user)))
@@ -220,7 +220,7 @@
  
  (module+ test
    (require rackunit
-@@ -1325,6 +1436,68 @@
+@@ -1354,6 +1465,68 @@
      (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
      (check-true (settled? m)))
  

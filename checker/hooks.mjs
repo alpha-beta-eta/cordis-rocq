@@ -63,6 +63,12 @@ export const vendored = {
   '@deepseek-ai/cosmokit': path.join(here, '.vendor/cosmokit/index.ts'),
   '@deepseek-ai/schemastery': path.join(here, '.vendor/schemastery/index.ts'),
 }
+// CORDIS_ENTRY 换用另一份 Cordis 源码 (如上游的 packages/core/src/index.ts, difftest 用);
+// 它 import 的裸包 cosmokit 映射到 vendored 的 cosmokit.
+if (process.env.CORDIS_ENTRY) {
+  vendored['@deepseek-ai/cordis'] = vendored.cordis = path.resolve(process.env.CORDIS_ENTRY)
+  vendored.cosmokit = vendored['@deepseek-ai/cosmokit']
+}
 
 // dsh 包名 -> 目录 的索引. 经 /mnt/d 遍历 packages/ (约 1300 个目录) 要 4 s, 所以缓存到磁盘,
 // 键是 dsh 仓库的 HEAD 提交. 工作区里未提交的新包不会进缓存; 删掉 .cache/ 即可重建.

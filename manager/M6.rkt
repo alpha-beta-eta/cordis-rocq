@@ -7,7 +7,9 @@
 ;  加载到一半时依赖变了 (视图过期), 实例中途改道: 立即转入卸载, 撤掉已经做了的, 等依赖回来再从头加载.
 ;  守卫 held 在这里才真正要紧: 使用者的卸载要走好几步, 提供者得一直等着.
 ;  settle! 可以换尝试实例的顺序 (#:order); 测试里用随机顺序检查结果与调度无关.
-;到这里, 本文件与 programs/cordis.rkt 的运行时一致 (那个文件对应 Rocq 的 Calculus.v).
+;  改道总是立即发生. 演算 (Calculus.v 的 may_step, 差异 h) 还允许视图过期之后让在途的步骤落地,
+;  Cordis 的异步迭代器就是这样; 本层只实现立即改道这一种调度, 它的执行都是演算的执行, 反过来不成立.
+;到这里, 本文件与 programs/cordis.rkt 的运行时一致 (那个文件取的是同一种调度, 它的每次执行都是 Rocq 的 Calculus.v 的执行).
 ;留给下一层的问题: 插件想在某个服务存在时用它, 不存在时也照常工作 (可选依赖).
 (provide (all-defined-out))
 
@@ -229,7 +231,7 @@
                  (instance-failure i))
          "卸载完毕 -> inactive")]
     [(cons (undo-op key used-id tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (define p (hash-ref provisions key #f))
      (set-instance-undo-stack! i rest)
      (cond
@@ -291,6 +293,7 @@
                     id name (hash->list wanted))]
            [else #f])]
     ;视图过期时开始卸载; 加载到一半时也一样 (中途改道), 已经走完的那一步留在撤销栈里
+    ;总是立即改道. 演算还允许视图过期后让在途的步骤落地 (差异 h), 这里只取立即改道这一种调度
     [(or 'loading 'active)
      #:when (not (equal? wanted (instance-view i)))
      (set-instance-phase! i 'unloading)

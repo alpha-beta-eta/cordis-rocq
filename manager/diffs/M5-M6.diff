@@ -1,6 +1,6 @@
---- M5.rkt	2026-11-25 03:28:48.810072700 +0800
-+++ M6.rkt	2026-11-25 03:28:48.810072700 +0800
-@@ -1,12 +1,14 @@
+--- M5.rkt	2026-11-25 22:35:58.781212300 +0800
++++ M6.rkt	2026-11-25 22:36:31.613077900 +0800
+@@ -1,12 +1,16 @@
  #lang racket
 -;渐进的插件管理器, 第5层: 运行时反应.
 +;渐进的插件管理器, 第6层: 异步加载.
@@ -17,12 +17,14 @@
 +;  加载到一半时依赖变了 (视图过期), 实例中途改道: 立即转入卸载, 撤掉已经做了的, 等依赖回来再从头加载.
 +;  守卫 held 在这里才真正要紧: 使用者的卸载要走好几步, 提供者得一直等着.
 +;  settle! 可以换尝试实例的顺序 (#:order); 测试里用随机顺序检查结果与调度无关.
-+;到这里, 本文件与 programs/cordis.rkt 的运行时一致 (那个文件对应 Rocq 的 Calculus.v).
++;  改道总是立即发生. 演算 (Calculus.v 的 may_step, 差异 h) 还允许视图过期之后让在途的步骤落地,
++;  Cordis 的异步迭代器就是这样; 本层只实现立即改道这一种调度, 它的执行都是演算的执行, 反过来不成立.
++;到这里, 本文件与 programs/cordis.rkt 的运行时一致 (那个文件取的是同一种调度, 它的每次执行都是 Rocq 的 Calculus.v 的执行).
 +;留给下一层的问题: 插件想在某个服务存在时用它, 不存在时也照常工作 (可选依赖).
  (provide (all-defined-out))
  
  ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
-@@ -42,10 +44,11 @@
+@@ -42,10 +46,11 @@
  (define (plugin name deps provides body [reacts '()])
    (make-plugin name deps provides body reacts))
  ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
@@ -35,7 +37,7 @@
    #:mutable)
  (define instance-deps
    (compose plugin-deps instance-plugin))
-@@ -119,7 +122,7 @@
+@@ -119,7 +124,7 @@
  (define (add-instance! m plug parent)
    (define id (fresh-id! m))
    (hash-set! (manager-instances m) id
@@ -44,7 +46,7 @@
    id)
  ;检查实例是否能够访问相应服务
  ;如果可以就返回对应的provision
-@@ -137,19 +140,19 @@
+@@ -137,19 +142,19 @@
      ;情况2: 检查是否为自己提供
      [else (and (= (provision-owner p) id) p)]))
  
@@ -70,7 +72,7 @@
         [else
          (define pid (provision-id p))
          ;操作失败时令牌也已用掉
-@@ -158,35 +161,38 @@
+@@ -158,35 +163,38 @@
            [(op-result new-state undo value)
             (set-provision-state! p new-state)
             (push-undo! (undo-op key pid tok undo) i)
@@ -124,7 +126,7 @@
  
  ;检查编号为used-id的provision是否仍被其他实例使用
  (define (in-use? m self-id used-id)
-@@ -210,13 +216,18 @@
+@@ -210,13 +218,18 @@
      (match entry
        [(undo-provide _ used-id) (in-use? m id used-id)]
        [_ #f])))
@@ -144,9 +146,9 @@
 +                 (instance-failure i))
 +         "卸载完毕 -> inactive")]
      [(cons (undo-op key used-id tok undo) rest)
-      ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+      ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
       (define p (hash-ref provisions key #f))
-@@ -252,29 +263,12 @@
+@@ -252,29 +265,12 @@
              (format "要求子实例 ~a (插件 ~a) 退出"
                      child-id (instance-name child))]
             [else #f])]))   ; 已经请它退出了, 等着
@@ -181,7 +183,7 @@
    (define name (instance-name i))
    (define wanted (wanted-view m i))
    (match (instance-phase i)
-@@ -285,47 +279,56 @@
+@@ -285,47 +281,57 @@
              #f]
             [(instance-disposed? i)
              (hash-remove! (manager-instances m) id)
@@ -204,6 +206,7 @@
 -    ;视图过期时开始卸载
 -    ['active
 +    ;视图过期时开始卸载; 加载到一半时也一样 (中途改道), 已经走完的那一步留在撤销栈里
++    ;总是立即改道. 演算还允许视图过期后让在途的步骤落地 (差异 h), 这里只取立即改道这一种调度
 +    [(or 'loading 'active)
       #:when (not (equal? wanted (instance-view i)))
       (set-instance-phase! i 'unloading)
@@ -274,7 +277,7 @@
  
  ;静止时每个实例都安定: 加载失败, 或应当不运行且未运行, 或以正确视图active;
  ;并且没有可以移除的实例 (已弃置, inactive, 没有子实例)
-@@ -356,12 +359,13 @@
+@@ -356,12 +362,13 @@
     (λ (state) (hash-remove state tok))
     tok))
  
@@ -290,7 +293,7 @@
  (define (install! m plug #:trace [trace void])
    (cond [(provider-conflict m plug)
           => (λ (existing)
-@@ -369,31 +373,27 @@
+@@ -369,31 +376,27 @@
                       (plugin-name plug) (instance-name existing)))])
    (define id (add-instance! m plug #f))
    (trace id (format "装上实例 ~a (插件 ~a), 依赖 ~a" id (plugin-name plug) (plugin-deps plug)))
@@ -328,7 +331,7 @@
  ;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
  ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
  (define (react! m id index #:trace [trace void])
-@@ -413,7 +413,6 @@
+@@ -413,7 +416,6 @@
    (define child-id (add-instance! m child id))
    (push-undo! (undo-spawn child-id) i)
    (trace id (format "实例 ~a 作出反应: 子实例 ~a (插件 ~a)" id child-id (plugin-name child)))
@@ -336,7 +339,7 @@
    child-id)
  
  ;事件 event 发生时依次调用的处理器
-@@ -508,6 +507,13 @@
+@@ -508,6 +510,13 @@
                  (Done))
            (list ping)))
  
@@ -350,7 +353,7 @@
  (define (tools-of m)
    (define p (provision-ref m 'tools))
    (and p (sort (hash-keys (provision-state p)) string<?)))
-@@ -517,6 +523,7 @@
+@@ -517,6 +526,7 @@
    (define (scene title thunk)
      (printf "\n== ~a\n" title)
      (thunk)
@@ -358,7 +361,7 @@
      (show m))
    (define ids (make-hash))
    (define (install name plug) (hash-set! ids name (install! m plug #:trace print-step)))
-@@ -553,10 +560,31 @@
+@@ -553,10 +563,31 @@
           (λ () (reset! m (hash-ref ids 'bad) #:trace print-step)))
    (scene "编排者换版本: 移除 git, 装上 git2 (插件市场, 自更新都是这样的调用)"
           (λ () (dispose 'git)
@@ -392,7 +395,7 @@
  
    ;; 依赖没有时等待, 有了随即加载; 安装次序随意
    (define m (make-manager))
-@@ -766,4 +794,140 @@
+@@ -766,4 +797,140 @@
                                (prog (serve 'tools (hash)) (Fail "坏了")))))
      (check-false (tools-of m))
      (check-eq? (instance-phase (instance-ref m s)) 'inactive)

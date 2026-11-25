@@ -47,7 +47,15 @@
             (apply c))
         (Done)))))
 (define (raised->why e)
-  (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
+  (format "apply 抛出异常: ~a" (raised-message e)))
+(define (raised-message e)
+  (if (exn? e) (exn-message e) e))
+;服务操作抛出的值 (不同于返回 #f 的拒绝). 与 apply 抛出一样算加载失败, 已做的撤掉;
+;只有用户中断 (break) 照常传出去
+(struct Raised (message))
+(define (run-operation operation tok state)
+  (with-handlers ([(λ (e) (not (exn:break? e))) (λ (e) (Raised (raised-message e)))])
+    (operation tok state)))
 ;当前正在运行的是哪次加载的 apply
 (define load-key (make-continuation-mark-key 'load))
 (define (check-in-apply who c)
@@ -219,14 +227,16 @@
         (define pid (provision-id p))
         ;操作失败时令牌也已用掉
         (define tok (fresh-id! m))
-        (match (operation tok (provision-state p))
+        (match (run-operation operation tok (provision-state p))
           [(op-result new-state undo value)
            (set-provision-state! p new-state)
            (push-undo! (undo-op key pid tok undo) i)
            (set-instance-remaining! i (cont value))
            (format "在 ~a (编号 ~a) 上执行操作 (令牌 ~a), 结果 ~a"
                    key pid tok value)]
-          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)])])]
+          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)]
+          [(Raised why)
+           (fail! (format "~a (编号 ~a) 上的操作抛出异常: ~a" key pid why) i)])])]
     [(Provide key init next)
      (cond [(not (member key (instance-provides i)))
             (fail! (format "~a 不在声明的 provides ~a 中"
@@ -291,7 +301,7 @@
                  (instance-failure i))
          "卸载完毕 -> inactive")]
     [(cons (undo-op key used-id tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (define p (hash-ref provisions key #f))
      (set-instance-undo-stack! i rest)
      (cond
@@ -359,6 +369,7 @@
                         (format ", 在场的可选依赖: ~a" present)))]
            [else #f])]
     ;视图过期时开始卸载; 加载到一半时也一样 (中途改道), 已经走完的那一步留在撤销栈里
+    ;总是立即改道. 演算还允许视图过期后让在途的步骤落地 (差异 h), 这里只取立即改道这一种调度
     [(or 'loading 'active)
      #:when (not (equal? wanted (instance-view i)))
      (set-instance-phase! i 'unloading)
@@ -1115,6 +1126,22 @@
     (check-equal? runs 1)
     (check-eq? (instance-phase (instance-ref m thrower)) 'inactive)
     (check-equal? (tools-of m) '()))
+
+  ;; 服务操作抛出异常 (不是返回 #f 的拒绝): 同样是加载失败, 已做的撤掉; 不逃出 settle!
+  (let ([m (make-manager)])
+    (void (install! m core))
+    (define boom (λ (tok state) (error 'boom "服务出错")))
+    (define user
+      (install! m (plugin "user" '(tools) '()
+                          (λ (ctx)
+                            (ctx-use ctx 'tools (register "leftover" 1))
+                            (ctx-use ctx 'tools boom)))))
+    (check-eq? (instance-phase (instance-ref m user)) 'inactive)
+    (check-equal? (instance-failure (instance-ref m user))
+                  (format "tools (编号 ~a) 上的操作抛出异常: boom: 服务出错"
+                          (provision-id (provision-ref m 'tools))))
+    (check-equal? (tools-of m) '())
+    (check-not-exn (λ () (settle! m))))
 
   ;; ctx-provide 和 ctx-plugin 也是 await 点: 它们之后的代码在指令执行之后才运行
   (let ([m (make-manager)] [log '()])

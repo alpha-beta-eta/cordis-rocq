@@ -1,5 +1,5 @@
---- M7.rkt	2026-11-25 03:28:48.810636100 +0800
-+++ M8.rkt	2026-11-25 03:28:48.810636100 +0800
+--- M7.rkt	2026-11-25 22:36:31.315857400 +0800
++++ M8.rkt	2026-11-25 22:36:31.321573800 +0800
 @@ -1,20 +1,19 @@
  #lang racket
 -;渐进的插件管理器, 第7层: 可选依赖.
@@ -53,7 +53,7 @@
              (fail! (format "~a 不在声明的 provides ~a 中"
                             key (instance-provides i))
                     i)]
-@@ -428,7 +427,8 @@
+@@ -429,7 +428,8 @@
    (trace id (format "重试实例 ~a" id)))
  ;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
  ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
@@ -63,7 +63,7 @@
    (define i (existing-instance 'react! m id))
    (define reactions (plugin-reacts (instance-plugin i)))
    (unless (and (eq? (instance-phase i) 'active)
-@@ -437,7 +437,15 @@
+@@ -438,7 +438,15 @@
    (unless (and (exact-nonnegative-integer? index)
                 (< index (length reactions)))
      (error 'react! "实例 ~a 没有第 ~a 个事件处理器" id index))
@@ -80,7 +80,7 @@
    (cond [(provider-conflict m child)
           => (λ (existing)
                (error 'react! "~a 与 ~a 提供了相同的服务"
-@@ -471,7 +479,7 @@
+@@ -472,7 +480,7 @@
    (newline)
    (printf "  -- 服务:")
    (when (zero? (hash-count (manager-provisions m))) (printf " (无)"))
@@ -89,7 +89,7 @@
      (define p (provision-ref m key))
      (printf " ~a[编号~a, 由#~a提供]=~a" key (provision-id p) (provision-owner p)
              (case key
-@@ -566,6 +574,22 @@
+@@ -567,6 +575,22 @@
                        (Done))))
            #:optional '(llm)))
  
@@ -112,7 +112,7 @@
  ;服务的内容, 按名字排序; 没有这个服务时为#f
  (define (state-of m key)
    (define p (provision-ref m key))
-@@ -627,7 +651,18 @@
+@@ -628,7 +652,18 @@
    (scene "装 llm: assistant 的在场集变了, 重载, 换成用 llm 的变体"
           (λ () (install 'llm llm-provider)))
    (scene "移除 llm: assistant 先卸载 (llm 被守卫挡着), 撤掉它在 llm 上登记的一项, 再按退化的变体加载"
@@ -132,7 +132,7 @@
  
  (module+ test
    (require rackunit
-@@ -944,6 +979,72 @@
+@@ -945,6 +980,72 @@
      (check-true (quiet-within? m 10))
      (check-true (settled? m)))
  

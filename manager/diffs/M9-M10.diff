@@ -1,6 +1,6 @@
---- M9.rkt	2026-11-25 03:28:48.810636100 +0800
-+++ M10.rkt	2026-11-25 03:28:48.810636100 +0800
-@@ -1,18 +1,16 @@
+--- M9.rkt	2026-11-25 22:37:27.142516600 +0800
++++ M10.rkt	2026-11-25 22:37:10.958387900 +0800
+@@ -1,19 +1,16 @@
  #lang racket
 -;渐进的插件管理器, 第9层: ctx 与 apply.
 +;渐进的插件管理器, 第10层: 配置.
@@ -13,7 +13,8 @@
 -;  一次 ctx 调用之后的代码, 在执行这条指令的那一步里、指令执行之后才运行 (直到下一次调用);
 -;  别的插件和编排操作只能插在调用之间. (为此 Provide 和 Spawn 的 next 改成了续延.)
 -;  apply 抛出的任何值都是加载失败. 被服务拒绝的操作不在 apply 里抛出, 而是直接让加载失败,
--;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). parameterize 只对 apply 的代码有效.
+-;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). 服务操作本身抛出异常也一样:
+-;  运行时把它转成加载失败, 撤掉已做的, 不让它逃出 settle!. parameterize 只对 apply 的代码有效.
 -;  ctx 只能在它所属实例的这次 apply 里同步使用; 存起来以后 (或在别的插件的 apply 里) 再用会报错.
 -;  这里的纪律仍然比 Cordis 严: 共享状态只能经 ctx-use 改动, 每个操作都交出逆 (Cordis 允许裸 disposer).
 -;留给下一层的问题: 插件带配置; 换配置要重新加载.
@@ -30,7 +31,7 @@
  (require (only-in racket/control reset-at shift-at))
  (provide (all-defined-out))
  
-@@ -27,7 +25,7 @@
+@@ -28,7 +25,7 @@
  ;cont : value -> ir
  (struct Op (key operation cont))
  ;安装子插件child, 其生命期不超过当前实例
@@ -39,7 +40,7 @@
  (struct Done ())
  (struct Fail (why))
  
-@@ -35,15 +33,18 @@
+@@ -36,15 +33,18 @@
  
  ;apply 外面的提示符; ctx 调用中止到这里
  (define apply-tag (make-continuation-prompt-tag 'apply))
@@ -61,8 +62,8 @@
 +            (apply c))
          (Done)))))
  (define (raised->why e)
-   (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
-@@ -61,10 +62,11 @@
+   (format "apply 抛出异常: ~a" (raised-message e)))
+@@ -70,10 +70,11 @@
  (define (ctx-provide c key init)
    (check-in-apply 'ctx-provide c)
    (shift-at apply-tag k (Provide key init k)))
@@ -77,7 +78,7 @@
  ;可选依赖是否在场
  (define (ctx-has? c key)
    (and (member key (ctx-present c)) #t))
-@@ -74,18 +76,23 @@
+@@ -83,18 +84,23 @@
  
  ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
  ;构造时reacts可以省略, 默认没有事件处理器
@@ -107,7 +108,7 @@
    #:mutable)
  (define instance-deps
    (compose plugin-deps instance-plugin))
-@@ -161,16 +168,23 @@
+@@ -170,16 +176,23 @@
  (define (has-children? m id)
    (for/or ([i (in-hash-values (manager-instances m))])
      (equal? (instance-parent i) id)))
@@ -137,7 +138,7 @@
    id)
  ;检查实例是否能够访问相应服务
  ;如果可以就返回对应的provision
-@@ -230,14 +244,14 @@
+@@ -241,14 +254,14 @@
              (push-undo! (undo-provide key new-id) i)
              (set-instance-remaining! i (next (void)))
              (format "提供 ~a (编号 ~a)" key new-id)])]
@@ -154,7 +155,7 @@
              (push-undo! (undo-spawn child-id) i)
              (set-instance-remaining! i (next (void)))
              (format "安装子插件 ~a (实例 ~a)" (plugin-name child) child-id)])]))
-@@ -334,7 +348,8 @@
+@@ -345,7 +358,8 @@
              (set-instance-phase! i 'loading)
              ;apply 拿到的 ctx 记下在场集, 由 ctx-has? 选变体
              (set-instance-remaining!
@@ -164,7 +165,7 @@
              (set-instance-undo-stack! i '())
              (set-instance-view! i wanted)
              (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
-@@ -425,14 +440,15 @@
+@@ -437,14 +451,15 @@
    (or (instance-ref m id)
        (error who "没有编号为 ~a 的实例" id)))
  ;装上插件: 先停在 inactive, 依赖都可用时由 settle! 加载. 返回实例id
@@ -182,7 +183,7 @@
    (trace id (format "装上实例 ~a (插件 ~a), 依赖 ~a" id (plugin-name plug) (plugin-deps plug)))
    id)
  ;移除实例: 标记为已弃置; 它的使用者先卸载, 它再卸载, 最后从管理器中删除
-@@ -455,6 +471,36 @@
+@@ -467,6 +482,36 @@
      (error 'reset! "实例 ~a 不是加载失败后的inactive实例" id))
    (set-instance-failure! i #f)
    (trace id (format "重试实例 ~a" id)))
@@ -219,7 +220,7 @@
  ;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
  ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
  ;第index个处理器是一族时, 装上它在载荷payload处的插件
-@@ -476,6 +522,7 @@
+@@ -488,6 +533,7 @@
            [(void? payload)
             (error 'react! "实例 ~a 的第 ~a 个事件处理器是一族, 需要载荷" id index)]
            [else (handler payload)]))
@@ -227,7 +228,7 @@
    (cond [(provider-conflict m child)
           => (λ (existing)
                (error 'react! "~a 与 ~a 提供了相同的服务"
-@@ -618,6 +665,13 @@
+@@ -630,6 +676,13 @@
            (λ (ctx) (void))
            (list restrict)))
  
@@ -241,7 +242,7 @@
  ;服务的内容, 按名字排序; 没有这个服务时为#f
  (define (state-of m key)
    (define p (provision-ref m key))
-@@ -690,26 +744,40 @@
+@@ -702,26 +755,40 @@
    (scene "agent3 结束: 它被守卫挡着, 限制先撤销, agent3 才拆除; agent4 的限制不受影响"
           (λ () (dispose 'agent3)))
    (scene "guard 结束: agent4 上的限制随它撤销, agent4 照常运行"
@@ -285,7 +286,7 @@
  
    ;; 依赖没有时等待, 有了随即加载; 安装次序随意
    (define m (make-manager))
-@@ -1165,6 +1233,91 @@
+@@ -1193,6 +1260,91 @@
      (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
      (check-true (settled? m)))
  

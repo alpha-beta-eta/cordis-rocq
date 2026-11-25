@@ -1,5 +1,5 @@
---- M2.rkt	2026-11-25 03:28:48.806463800 +0800
-+++ M3.rkt	2026-11-25 03:28:48.808967500 +0800
+--- M2.rkt	2026-11-25 22:35:58.765957300 +0800
++++ M3.rkt	2026-11-25 22:35:58.769410100 +0800
 @@ -1,14 +1,13 @@
  #lang racket
 -;渐进的插件管理器, 第2层: 服务与依赖.
@@ -203,7 +203,7 @@
      ['() #f]
 -    [(cons (undo-op key tok undo) rest)
 +    [(cons (undo-op key used-id tok undo) rest)
-      ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+      ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
 -     (define p (hash-ref provisions key))
 +     (define p (hash-ref provisions key #f))
       (set-instance-undo-stack! i rest)

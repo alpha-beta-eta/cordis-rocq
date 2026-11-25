@@ -153,7 +153,7 @@
   (match (instance-undo-stack i)
     ['() #f]
     [(cons (undo-op key tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (define p (hash-ref provisions key))
      (set-instance-undo-stack! i rest)
      (set-provision-state! p (undo (provision-state p)))

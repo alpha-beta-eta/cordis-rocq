@@ -1,6 +1,6 @@
---- M8.rkt	2026-11-25 03:28:48.810636100 +0800
-+++ M9.rkt	2026-11-25 03:28:48.810636100 +0800
-@@ -1,19 +1,19 @@
+--- M8.rkt	2026-11-25 22:36:31.321573800 +0800
++++ M9.rkt	2026-11-25 22:37:27.142516600 +0800
+@@ -1,19 +1,20 @@
  #lang racket
 -;渐进的插件管理器, 第8层: 交集生命期.
 +;渐进的插件管理器, 第9层: ctx 与 apply.
@@ -26,7 +26,8 @@
 +;  一次 ctx 调用之后的代码, 在执行这条指令的那一步里、指令执行之后才运行 (直到下一次调用);
 +;  别的插件和编排操作只能插在调用之间. (为此 Provide 和 Spawn 的 next 改成了续延.)
 +;  apply 抛出的任何值都是加载失败. 被服务拒绝的操作不在 apply 里抛出, 而是直接让加载失败,
-+;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). parameterize 只对 apply 的代码有效.
++;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). 服务操作本身抛出异常也一样:
++;  运行时把它转成加载失败, 撤掉已做的, 不让它逃出 settle!. parameterize 只对 apply 的代码有效.
 +;  ctx 只能在它所属实例的这次 apply 里同步使用; 存起来以后 (或在别的插件的 apply 里) 再用会报错.
 +;  这里的纪律仍然比 Cordis 严: 共享状态只能经 ctx-use 改动, 每个操作都交出逆 (Cordis 允许裸 disposer).
 +;留给下一层的问题: 插件带配置; 换配置要重新加载.
@@ -34,7 +35,7 @@
  (provide (all-defined-out))
  
  ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
-@@ -21,7 +21,8 @@
+@@ -21,7 +22,8 @@
  ;undo : 状态 -> 状态, 撤销这次操作; 它作用在撤销时的状态上
  (struct op-result (state undo value))
  
@@ -44,7 +45,7 @@
  (struct Provide (key init next))
  ;cont : value -> ir
  (struct Op (key operation cont))
-@@ -29,26 +30,56 @@
+@@ -29,26 +31,64 @@
  (struct Spawn (child next))
  (struct Done ())
  (struct Fail (why))
@@ -75,7 +76,15 @@
 +        (apply c)
 +        (Done)))))
 +(define (raised->why e)
-+  (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
++  (format "apply 抛出异常: ~a" (raised-message e)))
++(define (raised-message e)
++  (if (exn? e) (exn-message e) e))
++;服务操作抛出的值 (不同于返回 #f 的拒绝). 与 apply 抛出一样算加载失败, 已做的撤掉;
++;只有用户中断 (break) 照常传出去
++(struct Raised (message))
++(define (run-operation operation tok state)
++  (with-handlers ([(λ (e) (not (exn:break? e))) (λ (e) (Raised (raised-message e)))])
++    (operation tok state)))
 +;当前正在运行的是哪次加载的 apply
 +(define load-key (make-continuation-mark-key 'load))
 +(define (check-in-apply who c)
@@ -116,7 +125,26 @@
  ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
  ;remaining 是剩余需要执行的程序;
  ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
-@@ -197,7 +228,7 @@
+@@ -174,14 +214,16 @@
+         (define pid (provision-id p))
+         ;操作失败时令牌也已用掉
+         (define tok (fresh-id! m))
+-        (match (operation tok (provision-state p))
++        (match (run-operation operation tok (provision-state p))
+           [(op-result new-state undo value)
+            (set-provision-state! p new-state)
+            (push-undo! (undo-op key pid tok undo) i)
+            (set-instance-remaining! i (cont value))
+            (format "在 ~a (编号 ~a) 上执行操作 (令牌 ~a), 结果 ~a"
+                    key pid tok value)]
+-          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)])])]
++          [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)]
++          [(Raised why)
++           (fail! (format "~a (编号 ~a) 上的操作抛出异常: ~a" key pid why) i)])])]
+     [(Provide key init next)
+      (cond [(not (member key (instance-provides i)))
+             (fail! (format "~a 不在声明的 provides ~a 中"
+@@ -197,7 +239,7 @@
              (define new-id (fresh-id! m))
              (hash-set! provisions key (provision new-id id init))
              (push-undo! (undo-provide key new-id) i)
@@ -125,7 +153,7 @@
              (format "提供 ~a (编号 ~a)" key new-id)])]
      [(Spawn child next)
       (cond [(provider-conflict m child)
-@@ -208,7 +239,7 @@
+@@ -208,7 +250,7 @@
             [else
              (define child-id (add-instance! m child id))
              (push-undo! (undo-spawn child-id) i)
@@ -134,7 +162,7 @@
              (format "安装子插件 ~a (实例 ~a)" (plugin-name child) child-id)])]))
  
  ;检查编号为used-id的provision是否仍被其他实例使用
-@@ -299,12 +330,11 @@
+@@ -299,12 +341,11 @@
              (format "实例 ~a (插件 ~a) 已弃置且卸载完毕, 从管理器中移除"
                      id name)]
             [(and (not (instance-failure i)) wanted)
@@ -149,7 +177,7 @@
              (set-instance-undo-stack! i '())
              (set-instance-view! i wanted)
              (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
-@@ -492,86 +522,84 @@
+@@ -493,86 +534,84 @@
  
  (define core
    (plugin "core" '() '(tools)
@@ -275,7 +303,7 @@
            #:optional '(llm)))
  
  ;agent n 的上下文是服务 (agent n); restrict n 是挂在它上面的效应,
-@@ -579,15 +607,15 @@
+@@ -580,15 +619,15 @@
  (define (agent-key n) (list 'agent n))
  (define (agent n)
    (plugin (format "agent~a" n) '() (list (agent-key n))
@@ -296,7 +324,7 @@
            (list restrict)))
  
  ;服务的内容, 按名字排序; 没有这个服务时为#f
-@@ -808,7 +836,7 @@
+@@ -809,7 +848,7 @@
    ;; 子插件与现存实例提供相同的服务: 父实例加载失败
    (let ([m (make-manager)])
      (void (install! m core))
@@ -305,7 +333,7 @@
      (check-equal? (instance-failure (instance-ref m p)) "子插件 core 与 core 提供了相同的服务"))
  
    ;; react: 相同的处理器登记两次, 令牌让撤销只删自己那一项
-@@ -865,7 +893,7 @@
+@@ -866,7 +905,7 @@
    ;; 义务: 依赖不成环. 依赖自己提供的服务 (长度为 1 的环) 的插件永远等待, 运行时不检查 (同 Cordis);
    ;; 别的插件也来不了: 提供同一个服务会冲突
    (let ([m (make-manager)])
@@ -314,7 +342,7 @@
      (check-eq? (instance-phase (instance-ref m s)) 'inactive)
      (check-false (instance-failure (instance-ref m s)))
      (check-exn #rx"相同的服务" (λ () (install! m core))))
-@@ -879,16 +907,16 @@
+@@ -880,16 +919,16 @@
    ;; 只能在依赖和自己提供的服务上操作; 只能提供声明过的服务
    (let ([m (make-manager)])
      (void (install! m core))
@@ -334,7 +362,7 @@
      (check-false (tools-of m))
      (check-eq? (instance-phase (instance-ref m s)) 'inactive)
      (check-false (instance-failure (instance-ref m s))))
-@@ -943,13 +971,13 @@
+@@ -944,13 +983,13 @@
    ;; 不在场的可选依赖不能操作; 可选依赖不阻止加载
    (let ([m (make-manager)])
      (define peek
@@ -350,7 +378,7 @@
  
    ;; 最多走 n 步; 静止了返回 #t
    (define (quiet-within? m n)
-@@ -960,25 +988,117 @@
+@@ -961,25 +1000,133 @@
    ;; install! 只拦下最简单的一种: 直接装上的插件可选依赖自己提供的服务
    (check-exn #rx"可选依赖自己提供的服务"
               (λ () (install! (make-manager)
@@ -421,6 +449,22 @@
 +    (check-equal? runs 1)
 +    (check-eq? (instance-phase (instance-ref m thrower)) 'inactive)
 +    (check-equal? (tools-of m) '()))
++
++  ;; 服务操作抛出异常 (不是返回 #f 的拒绝): 同样是加载失败, 已做的撤掉; 不逃出 settle!
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (define boom (λ (tok state) (error 'boom "服务出错")))
++    (define user
++      (install! m (plugin "user" '(tools) '()
++                          (λ (ctx)
++                            (ctx-use ctx 'tools (register "leftover" 1))
++                            (ctx-use ctx 'tools boom)))))
++    (check-eq? (instance-phase (instance-ref m user)) 'inactive)
++    (check-equal? (instance-failure (instance-ref m user))
++                  (format "tools (编号 ~a) 上的操作抛出异常: boom: 服务出错"
++                          (provision-id (provision-ref m 'tools))))
++    (check-equal? (tools-of m) '())
++    (check-not-exn (λ () (settle! m))))
 +
 +  ;; ctx-provide 和 ctx-plugin 也是 await 点: 它们之后的代码在指令执行之后才运行
 +  (let ([m (make-manager)] [log '()])

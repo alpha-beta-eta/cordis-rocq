@@ -3,7 +3,11 @@
 ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
 ;本层新增: 每个操作除了新状态, 还交出一个逆 (undo); 实例把逆压进自己的撤销栈.
 ;  dispose! 按 LIFO 弹出撤销栈, 逐项施加逆, 然后移除实例. 加载失败时同样撤掉已做的, 停在 inactive.
-;  逆作用在撤销时的状态上, 所以别的插件在中间做的事会保留下来.
+;  逆作用在撤销时的状态上, 所以别的插件在中间做的事可以保留下来. 但这要两条前提:
+;  实例内部靠 LIFO (后做的先撤, 每个逆面对的正是它的操作留下的状态);
+;  实例之间靠服务自己的规格, 即撤销独立性: 一个实例的逆不碰别的实例的操作留下的东西.
+;  只有每个操作都带逆还不够. 反例见测试中的 set-slot: A、B 先后写同一个槽, 卸 A 删掉的是 B 写的值,
+;  再卸 B 又把 A 的值写了回来. 演算中这条前提是 revert-independence (theories/Bridge.v 的 paper_revert_indep).
 ;  每次操作还拿到一个新鲜的令牌, 用来标记它产生的东西: 同一个处理器登记两次, 各自的逆只删自己那一项.
 ;留给下一层的问题: 共享状态是创建管理器时给定的, 插件之间只能通过它合作;
 ;  插件不能把服务提供给别的插件, 也不能声明自己要用什么.
@@ -86,7 +90,7 @@
   (match (instance-undo-stack i)
     ['() #f]
     [(cons (undo-op key tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (set-instance-undo-stack! i rest)
      (hash-set! (manager-states m) key (undo (state-ref m key)))
      (format "撤销 ~a 上的一次操作 (令牌 ~a)" key tok)]))
@@ -125,6 +129,14 @@
          t))
      (if first (hash-remove state first) state))
    tok))
+;对照: 写槽, 逆恢复写之前的值. 每个逆都撤得掉自己刚做的那次写,
+;但两个实例写同一个槽时, 逆互相干扰 (不满足撤销独立性)
+(define ((set-slot name value) tok state)
+  (define old (hash-ref state name #f))
+  (op-result
+   (hash-set state name value)
+   (λ (state) (if old (hash-set state name old) (hash-remove state name)))
+   'ok))
 
 ;;; 编排操作 (外部输入); 前提不满足时报错
 
@@ -280,6 +292,18 @@
     (dispose! m p2)
     (check-equal? (handlers-for m "tick") '("ping"))
     (check-equal? (hash-keys (state-ref m 'events)) (list (add1 p2))))
+
+  ;; 反例: 都带逆, 也按 LIFO 撤, 但两个实例的逆不独立, 别人做的事没有保留下来
+  (let* ([m (make-manager)]
+         [a (install! m (plugin "a" (prog ('tools (set-slot "slot" 1)) (Done))))]
+         [b (install! m (plugin "b" (prog ('tools (set-slot "slot" 2)) (Done))))])
+    (dispose! m a)
+    ;; b 仍在, 它写的值却没了
+    (check-eq? (instance-phase (instance-ref m b)) 'active)
+    (check-false (hash-ref (state-ref m 'tools) "slot" #f))
+    (dispose! m b)
+    ;; 两个都卸了, 留下的是 a 写的值
+    (check-equal? (hash-ref (state-ref m 'tools) "slot" #f) 1))
 
   ;; 没有的共享状态
   (define nowhere (install! m (plugin "nowhere" (prog ('db (register "x" 1)) (Done)))))

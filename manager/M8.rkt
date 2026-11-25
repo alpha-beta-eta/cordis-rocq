@@ -246,7 +246,7 @@
                  (instance-failure i))
          "卸载完毕 -> inactive")]
     [(cons (undo-op key used-id tok undo) rest)
-     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
      (define p (hash-ref provisions key #f))
      (set-instance-undo-stack! i rest)
      (cond
@@ -314,6 +314,7 @@
                         (format ", 在场的可选依赖: ~a" present)))]
            [else #f])]
     ;视图过期时开始卸载; 加载到一半时也一样 (中途改道), 已经走完的那一步留在撤销栈里
+    ;总是立即改道. 演算还允许视图过期后让在途的步骤落地 (差异 h), 这里只取立即改道这一种调度
     [(or 'loading 'active)
      #:when (not (equal? wanted (instance-view i)))
      (set-instance-phase! i 'unloading)

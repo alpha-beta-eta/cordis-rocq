@@ -1,6 +1,6 @@
---- M0.rkt	2026-11-25 02:10:03.984437100 +0800
-+++ M1.rkt	2026-11-25 02:13:32.652064200 +0800
-@@ -1,13 +1,18 @@
+--- M0.rkt	2026-11-25 22:35:58.730829800 +0800
++++ M1.rkt	2026-11-25 22:36:10.536830200 +0800
+@@ -1,13 +1,22 @@
  #lang racket
 -;渐进的插件管理器, 第0层: 注册.
 +;渐进的插件管理器, 第1层: 卸载.
@@ -10,7 +10,11 @@
 -;留给下一层的问题: 装上去的插件卸不掉; 加载到一半失败时, 已经做了的事留在共享状态里.
 +;本层新增: 每个操作除了新状态, 还交出一个逆 (undo); 实例把逆压进自己的撤销栈.
 +;  dispose! 按 LIFO 弹出撤销栈, 逐项施加逆, 然后移除实例. 加载失败时同样撤掉已做的, 停在 inactive.
-+;  逆作用在撤销时的状态上, 所以别的插件在中间做的事会保留下来.
++;  逆作用在撤销时的状态上, 所以别的插件在中间做的事可以保留下来. 但这要两条前提:
++;  实例内部靠 LIFO (后做的先撤, 每个逆面对的正是它的操作留下的状态);
++;  实例之间靠服务自己的规格, 即撤销独立性: 一个实例的逆不碰别的实例的操作留下的东西.
++;  只有每个操作都带逆还不够. 反例见测试中的 set-slot: A、B 先后写同一个槽, 卸 A 删掉的是 B 写的值,
++;  再卸 B 又把 A 的值写了回来. 演算中这条前提是 revert-independence (theories/Bridge.v 的 paper_revert_indep).
 +;  每次操作还拿到一个新鲜的令牌, 用来标记它产生的东西: 同一个处理器登记两次, 各自的逆只删自己那一项.
 +;留给下一层的问题: 共享状态是创建管理器时给定的, 插件之间只能通过它合作;
 +;  插件不能把服务提供给别的插件, 也不能声明自己要用什么.
@@ -25,7 +29,7 @@
  
  ;program ir
  ;cont : value -> ir
-@@ -23,22 +28,29 @@
+@@ -23,22 +32,29 @@
       (Op key operation (λ (ignored) (prog rest ...)))]))
  
  (struct plugin (name body))
@@ -60,7 +64,7 @@
  (define (fresh-id! m)
    (define id (manager-next-id m))
    (set-manager-next-id! m (add1 id))
-@@ -60,44 +72,96 @@
+@@ -60,44 +76,104 @@
       (cond
         [(not state) (values #f (fail! (format "没有共享状态 ~a" key) i))]
         [else
@@ -81,7 +85,7 @@
 +  (match (instance-undo-stack i)
 +    ['() #f]
 +    [(cons (undo-op key tok undo) rest)
-+     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来
++     ;; 逆作用在"现在"的状态上, 所以别人在中间做过的事会保留下来 (前提是撤销独立性, 见 M1 开头)
 +     (set-instance-undo-stack! i rest)
 +     (hash-set! (manager-states m) key (undo (state-ref m key)))
 +     (format "撤销 ~a 上的一次操作 (令牌 ~a)" key tok)]))
@@ -108,13 +112,7 @@
 +;事件处理器表: 状态是 令牌 -> (事件名 . 处理器) 的hash, 令牌的大小即登记的顺序
 +;同一个处理器可以登记多次, 令牌区分各次登记, 逆只删掉自己这一次
 +(define ((on event handler) tok state)
-   (op-result
--   (append state (list (cons event handler)))
--   'ok))
--
--;;; 编排操作 (外部输入)
--
--;装上插件: 立即把它的程序从头跑到尾; 返回实例id
++  (op-result
 +   (hash-set state tok (cons event handler))
 +   (λ (state) (hash-remove state tok))
 +   tok))
@@ -129,9 +127,20 @@
 +         t))
 +     (if first (hash-remove state first) state))
 +   tok))
-+
++;对照: 写槽, 逆恢复写之前的值. 每个逆都撤得掉自己刚做的那次写,
++;但两个实例写同一个槽时, 逆互相干扰 (不满足撤销独立性)
++(define ((set-slot name value) tok state)
++  (define old (hash-ref state name #f))
+   (op-result
+-   (append state (list (cons event handler)))
++   (hash-set state name value)
++   (λ (state) (if old (hash-set state name old) (hash-remove state name)))
+    'ok))
+ 
+-;;; 编排操作 (外部输入)
 +;;; 编排操作 (外部输入); 前提不满足时报错
-+
+ 
+-;装上插件: 立即把它的程序从头跑到尾; 返回实例id
 +(define (existing-instance who m id)
 +  (or (instance-ref m id)
 +      (error who "没有编号为 ~a 的实例" id)))
@@ -172,7 +181,7 @@
  
  (define (print-step id message)
    (printf "  [~a] ~a\n" id message))
-@@ -106,12 +170,12 @@
+@@ -106,12 +182,12 @@
    (printf "  -- 实例:")
    (for ([id (sort (hash-keys (manager-instances m)) <)])
      (define i (instance-ref m id))
@@ -189,7 +198,7 @@
    (newline))
  
  ;;; 示例插件
-@@ -125,7 +189,7 @@
+@@ -125,7 +201,7 @@
    (plugin "git"
            (prog ('tools (register "git" "版本控制"))
                  (Done))))
@@ -198,7 +207,7 @@
  (define bad
    (plugin "bad"
            (prog ('tools (register "grep" "搜索"))
-@@ -145,46 +209,84 @@
+@@ -145,46 +221,96 @@
      (printf "\n== ~a\n" title)
      (thunk)
      (show m))
@@ -292,6 +301,18 @@
 +    (dispose! m p2)
 +    (check-equal? (handlers-for m "tick") '("ping"))
 +    (check-equal? (hash-keys (state-ref m 'events)) (list (add1 p2))))
++
++  ;; 反例: 都带逆, 也按 LIFO 撤, 但两个实例的逆不独立, 别人做的事没有保留下来
++  (let* ([m (make-manager)]
++         [a (install! m (plugin "a" (prog ('tools (set-slot "slot" 1)) (Done))))]
++         [b (install! m (plugin "b" (prog ('tools (set-slot "slot" 2)) (Done))))])
++    (dispose! m a)
++    ;; b 仍在, 它写的值却没了
++    (check-eq? (instance-phase (instance-ref m b)) 'active)
++    (check-false (hash-ref (state-ref m 'tools) "slot" #f))
++    (dispose! m b)
++    ;; 两个都卸了, 留下的是 a 写的值
++    (check-equal? (hash-ref (state-ref m 'tools) "slot" #f) 1))
  
    ;; 没有的共享状态
    (define nowhere (install! m (plugin "nowhere" (prog ('db (register "x" 1)) (Done)))))
