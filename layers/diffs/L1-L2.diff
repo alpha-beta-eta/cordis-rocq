@@ -1,0 +1,714 @@
+--- L1.rkt	2026-11-25 03:30:21.489635900 +0800
++++ L2.rkt	2026-11-25 03:30:21.489635900 +0800
+@@ -1,13 +1,15 @@
+ #lang racket
+-;Cordis 的渐进原型, 第1层: 组件的生命周期.
++;Cordis 的渐进原型, 第2层: 依赖与提供.
+ ;各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 程序 (Done | Fail | Call), 组件, fiber 和它的生命周期
+-;  Inactive -> Loading -> Active -> Unloading -> Inactive.
+-;  fiber 加载时每次 Call 把服务交出的逆压进累加器 acc; 卸载时按 LIFO 逐项施加.
+-;  本层还没有提供: 存储 (键 -> 服务状态) 在初始状态给定, 各 fiber 共用.
+-;本层的性质: 保持性 (不变式), 恢复精确性 (别的 fiber 在中间动过存储也一样), 进展 (quiet ⇒ settled),
+-;  附录A (程序的解释与单独加载一致).
+-;引出下一层的问题: 存储里的服务从哪里来? 提供服务的组件卸载时, 用它的组件怎么办?
++;本层新增: 组件声明依赖 d 和提供 p; 程序多了 Provide k s P, 它建立绑定 ⟨ι, q, s⟩
++;  (提供编号, 提供者, 服务状态), 卸载时撤回. fiber 开始加载时记下视图 ω (每个依赖解析到的编号),
++;  依赖不再可见或换了编号时离开 (L-Divert, L-Leave).
++;  卸载的守卫 held: 自己的某个提供还被别人解析着时, 什么都不撤.
++;  新的错误: EUnresolved (操作的键解析不到), EConflict (一个程序重复提供同一个键;
++;  两个组件声明提供同一个键时, 后插入的那个在 O-Insert 就被拒绝, 不会走到这里).
++;本层的性质: 保持性 (不变式多了第3-8条), 次序 (依赖者在提供者之后加载, 之前卸载),
++;  恢复精确性, 进展 (quiet ⇒ settled, settled 要求视图正确), 附录A.
++;引出下一层的问题: 一组组件以不同的次序插入, 按不同的次序调度, 结果还一样吗?
+ ;记号: ⊥ / None 用 #f 表示.
+ (provide (all-defined-out))
+ 
+@@ -87,73 +89,108 @@
+ 
+ ;;; ======== 2 程序 ========
+ 
+-;P ::= Done | Fail | Call k a κ
++;P ::= Done | Fail | Call k a κ | Provide k s P
+ (struct Done () #:transparent)
+ (struct Fail () #:transparent)
+ (struct Call (k a κ) #:transparent)
++(struct Provide (k s P) #:transparent)
+ 
+-;Prog(d): Call k 要求 k ∈ d; 延续也在 Prog(d) 中.
++;Prog(d,p): Call k 要求 k ∈ d ∪ p, Provide k 要求 k ∈ p; 延续也在 Prog(d,p) 中.
+ ;这里在构造组件时把程序包起来, 每展开一段就检查一段.
+ ;违反时是类型错误 (抛异常), 不是程序的 Fail.
+-(define (Prog d P)
++(define (Prog d p P)
+   (define (bad what k)
+-    (error 'Prog "~a ~a 不在允许的键中 (d = ~a)" what k d))
++    (error 'Prog "~a ~a 不在允许的键中 (d = ~a, p = ~a)" what k d p))
+   (match P
+     [(or (Done) (Fail)) P]
+     [(Call k a κ)
+-     (unless (member k d) (bad "Call" k))
+-     (Call k a (λ (o) (Prog d (κ o))))]))
++     (unless (or (member k d) (member k p)) (bad "Call" k))
++     (Call k a (λ (o) (Prog d p (κ o))))]
++    [(Provide k s P*)
++     (unless (member k p) (bad "Provide" k))
++     (Provide k s (Prog d p P*))]))
+ 
+ (define-syntax program
+-  (syntax-rules (<-)
++  (syntax-rules (serve <-)
+     [(_ last) last]
++    [(_ (serve k s) rest ...) (Provide k s (program rest ...))]
+     [(_ (x <- k a) rest ...) (Call k a (λ (x) (program rest ...)))]
+     [(_ (k a) rest ...) (Call k a (λ (_) (program rest ...)))]))
+ 
+ ;;; ======== 3 组件, fiber 与状态 ========
+ 
+-;组件 ⟨d, body⟩, body ∈ Prog(d)
+-(struct component (d body))
+-(define (make-component d body)
+-  (component d (Prog d body)))
++;组件 ⟨d, p, body⟩, body ∈ Prog(d,p)
++(struct component (d p body))
++(define (make-component d p body)
++  (component d p (Prog d p body)))
+ 
+ ;fiber ⟨c, τ, θ⟩: 组件, 已请求移除, 生命周期状态
+ (struct fiber (c τ θ) #:transparent)
+-;状态 ⟨next, F, B⟩; F : N ⇀ Fiber, B : K ⇀ S 是存储.
+-;本层没有提供: 存储的键在初始状态给定, 之后只有各键上的服务状态会变
++;绑定 ⟨ι, q, s⟩: 提供编号, 提供者的名字, 服务状态
++(struct binding (ι q s) #:transparent)
++;状态 ⟨next, F, B⟩; F : N ⇀ Fiber, B : K ⇀ Binding
+ (struct state (next F B) #:transparent)
+-(define (init σ) (state 0 (hash) σ))
++(define init (state 0 (hash) (hash)))
+ 
+-;θ ::= Inactive ζ | Loading P acc | Active acc | Unloading acc ζ
+-;ζ 为 #f (⊥) 或错误 ξ: 'EUser 'EOp
++;θ ::= Inactive ζ | Loading P acc ω | Active acc ω | Unloading acc ω ζ
++;ζ 为 #f (⊥) 或错误 ξ: 'EUser 'EOp 'EUnresolved 'EConflict
+ (struct Inactive (ζ) #:transparent)
+-(struct Loading (P acc) #:transparent)
+-(struct Active (acc) #:transparent)
+-(struct Unloading (acc ζ) #:transparent)
+-
+-;u ::= UOp k t g
+-(struct UOp (k t g) #:transparent)
++(struct Loading (P acc ω) #:transparent)
++(struct Active (acc ω) #:transparent)
++(struct Unloading (acc ω ζ) #:transparent)
++
++;u ::= UOp k ι t g | UProv k ι
++(struct UOp (k ι t g) #:transparent)
++(struct UProv (k ι) #:transparent)
+ 
+ (define (F γ n) (hash-ref (state-F γ) n #f))
+ (define (B γ k) (hash-ref (state-B γ) k #f))
+ (define (names γ) (range (state-next γ)))
+ (define (acc-of θ)
+-  (match θ [(or (Loading _ acc) (Active acc) (Unloading acc _)) acc] [(Inactive _) '()]))
++  (match θ [(or (Loading _ acc _) (Active acc _) (Unloading acc _ _)) acc] [(Inactive _) '()]))
++(define (ω-of θ)
++  (match θ [(or (Loading _ _ ω) (Active _ ω) (Unloading _ ω _)) ω] [(Inactive _) #f]))
+ 
+ ;;; ======== 4 派生概念 ========
+ 
+ (define (installed? γ n)
+   (match (F γ n) [(fiber _ _ θ) (not (Inactive? θ))] [#f #f]))
+ 
+-;target(n) ⟺ ¬τ_n 且 d(c_n) 中的键都在存储中.
+-;本层存储的键不变, 所以只有 O-Dispose (τ_n ← true) 会让它变假
++;visible(k) = ι, 若 B(k) = ⟨ι, o, _⟩ 且 θ_o = Active; 否则 ⊥
++(define (visible γ k)
++  (match (B γ k)
++    [(binding ι o _) (match (F γ o) [(fiber _ _ (Active _ _)) ι] [_ #f])]
++    [#f #f]))
++
++;target(n) = ⊥, 若 τ_n 或某个依赖不可见; 否则 k ∈ d(c_n) ↦ visible(k)
+ (define (target prog γ n)
+   (match (F γ n)
+     [(fiber c τ _)
+      (and (not τ)
+-          (andmap (λ (k) (hash-has-key? (state-B γ) k)) (component-d (prog c))))]
++          (let ([ks (component-d (prog c))])
++            (and (andmap (λ (k) (visible γ k)) ks)
++                 (for/hash ([k ks]) (values k (visible γ k))))))]
+     [#f #f]))
+ 
++;resolves(m, ι) ⟺ installed(m) ∧ ∃k. ω_m(k) = ι
++(define (resolves? γ m ι)
++  (and (installed? γ m)
++       (for/or ([(k ι*) (ω-of (fiber-θ (F γ m)))]) (= ι* ι))))
++
++;held(n, acc) ⟺ ∃ UProv k ι ∈ acc. ∃m ≠ n. resolves(m, ι)
++;卸载的守卫: n 尚未撤回的某个提供仍被别的已安装 fiber 解析
++(define (held? γ n acc)
++  (for/or ([u acc])
++    (match u
++      [(UProv _ ι) (for/or ([m (names γ)]) (and (not (= m n)) (resolves? γ m ι)))]
++      [_ #f])))
++
++;p(c) 与某个现存 fiber 的 p 相交
++(define (conflict? prog γ c)
++  (for/or ([(n f) (state-F γ)])
++    (for/or ([k (component-p (prog c))])
++      (member k (component-p (prog (fiber-c f)))))))
++
+ ;;; ======== 5 规则 ========
+ 
+ ;标签
+@@ -197,9 +234,10 @@
+   (define (exists? n) (and (F γ n) #t))
+   (match ℓ
+     ;;; 编排规则
+-    ;以 m := next 为名插入 ⟨c, false, Inactive ⊥⟩
++    ;p(c) 不冲突: 以 m := next 为名插入 ⟨c, false, Inactive ⊥⟩
+     [(O-Insert c)
+-     (insert γ (fiber c #f (Inactive #f)))]
++     (and (not (conflict? prog γ c))
++          (insert γ (fiber c #f (Inactive #f))))]
+     ;n ∈ dom F: τ_n ← true
+     [(O-Dispose n)
+      (and (exists? n) (τ← γ n))]
+@@ -207,76 +245,100 @@
+     [(O-Reset n)
+      (and (exists? n)
+           (match (θ n) [(Inactive (? symbol?)) (θ← γ n (Inactive #f))] [_ #f]))]
+-    ;θ_n 为 Loading _ acc 或 Active acc, 且 ¬τ_n: θ_n ← Unloading acc ⊥
++    ;θ_n 为 Loading _ acc ω 或 Active acc ω, 且 ¬τ_n: θ_n ← Unloading acc ω ⊥
+     [(O-Restart n)
+      (and (exists? n) (not (fiber-τ (F γ n)))
+           (match (θ n)
+-            [(or (Loading _ acc) (Active acc)) (θ← γ n (Unloading acc #f))]
++            [(or (Loading _ acc ω) (Active acc ω)) (θ← γ n (Unloading acc ω #f))]
+             [_ #f]))]
+     ;;; 加载
+-    ;θ_n = Inactive ⊥ 且 target(n): θ_n ← Loading (body c_n) []
++    ;θ_n = Inactive ⊥ 且 target(n) = ω ≠ ⊥: θ_n ← Loading (body c_n) [] ω
+     [(L-Begin n)
+      (and (exists? n)
+           (match (θ n)
+             [(Inactive #f)
+-             (and (target prog γ n) (θ← γ n (Loading (component-body (prog (c n))) '())))]
++             (define ω (target prog γ n))
++             (and ω (θ← γ n (Loading (component-body (prog (c n))) '() ω)))]
+             [_ #f]))]
+-    ;θ_n = Loading P acc 且 ¬target(n): θ_n ← Unloading acc ⊥
++    ;θ_n = Loading P acc ω 且 target(n) ≠ ω: θ_n ← Unloading acc ω ⊥
+     [(L-Divert n)
+      (and (exists? n)
+           (match (θ n)
+-            [(Loading _ acc)
+-             (and (not (target prog γ n)) (θ← γ n (Unloading acc #f)))]
++            [(Loading _ acc ω)
++             (and (not (equal? (target prog γ n) ω)) (θ← γ n (Unloading acc ω #f)))]
+             [_ #f]))]
+-    ;θ_n = Loading P acc: 按 P 分情况. 只有收尾的 Done 要求 target(n)
++    ;θ_n = Loading P acc ω: 按 P 分情况. 只有收尾的 Done 要求 target(n) = ω;
++    ;其余各步在 target 变化后照样可走, 即在途迭代的落地
+     [(L-Step n)
+      (and (exists? n)
+           (match (θ n)
+-            [(Loading P acc)
+-             (and (or (not (Done? P)) (target prog γ n)) (load-step Σ prog γ n P acc))]
++            [(Loading P acc ω)
++             (and (or (not (Done? P)) (equal? (target prog γ n) ω)) (load-step Σ prog γ n P acc ω))]
+             [_ #f]))]
+     ;;; 卸载
+-    ;θ_n = Active acc 且 ¬target(n): θ_n ← Unloading acc ⊥
++    ;θ_n = Active acc ω 且 target(n) ≠ ω: θ_n ← Unloading acc ω ⊥
+     [(L-Leave n)
+      (and (exists? n)
+           (match (θ n)
+-            [(Active acc)
+-             (and (not (target prog γ n)) (θ← γ n (Unloading acc #f)))]
++            [(Active acc ω)
++             (and (not (equal? (target prog γ n) ω)) (θ← γ n (Unloading acc ω #f)))]
+             [_ #f]))]
+-    ;θ_n = Unloading (u :: acc) ζ: θ_n ← Unloading acc ζ, 并且 ...
++    ;θ_n = Unloading (u :: acc) ω ζ, 且 ¬held(n, u :: acc): θ_n ← Unloading acc ω ζ, 并且 ...
+     [(L-Undo n)
+      (and (exists? n)
+           (match (θ n)
+-            [(Unloading (cons u acc) ζ)
+-             (define (continue γ*) (θ← γ* n (Unloading acc ζ)))
+-             (match u
+-               ;把 B(k) 的状态 s 改为 g(s)
+-               [(UOp k _ g) (continue (B← γ k (g (B γ k))))])]
++            [(Unloading (cons u acc) ω ζ)
++             (define (continue γ*) (θ← γ* n (Unloading acc ω ζ)))
++             (and
++              (not (held? γ n (cons u acc)))
++              (match u
++               ;若绑定 ι 仍在, 把它的状态 s 改为 g(s)
++               [(UOp k ι _ g)
++                (match (B γ k)
++                  [(binding (== ι) o s) (continue (B← γ k (binding ι o (g s))))]
++                  [_ (continue γ)])]
++               ;删除 B(k); 由守卫, 没有 m ≠ n 满足 resolves(m, ι)
++               [(UProv k ι) (continue (B← γ k #f))]))]
+             [_ #f]))]
+-    ;θ_n = Unloading [] ζ: θ_n ← Inactive ζ
++    ;θ_n = Unloading [] ω ζ: θ_n ← Inactive ζ
+     [(L-Unloaded n)
+      (and (exists? n)
+-          (match (θ n) [(Unloading '() ζ) (θ← γ n (Inactive ζ))] [_ #f]))]
++          (match (θ n) [(Unloading '() _ ζ) (θ← γ n (Inactive ζ))] [_ #f]))]
+     ;τ_n 且 θ_n = Inactive _: 删除 F(n)
+     [(L-Remove n)
+      (and (exists? n) (fiber-τ (F γ n)) (Inactive? (θ n))
+           (F← γ n #f))]))
+ 
+ ;L-Step 的各情况
+-(define (load-step Σ prog γ n P acc)
+-  (define (fail ξ [γ γ]) (θ← γ n (Unloading acc ξ)))
++(define (load-step Σ prog γ n P acc ω)
++  (define c (fiber-c (F γ n)))
++  (define (fail ξ [γ γ]) (θ← γ n (Unloading acc ω ξ)))
+   (match P
+-    [(Done) (θ← γ n (Active acc))]
++    [(Done) (θ← γ n (Active acc ω))]
+     [(Fail) (fail 'EUser)]
+-    ;k ∈ d(c_n) 由 target 保证在存储中;
+-    ;取令牌 t := next, 在存储中 k 的状态 s 上运行 run a t s
++    ;k ∈ d(c_n) 时查视图 ω, 否则查当前绑定 B (提供者必须是 n), 得到编号 ι;
++    ;取令牌 t := next, 在该绑定的状态 s 上运行 run a t s
+     [(Call k a κ)
+-     (define t (state-next γ))
+-     (match (run Σ a t (B γ k))
+-       [(list s* g out)
+-        (θ← (next+1 (B← γ k s*))
+-            n (Loading (κ out) (cons (UOp k t g) acc)))]
+-       [#f (fail 'EOp (next+1 γ))])]))
++     (define ι
++       (if (member k (component-d (prog c)))
++           (hash-ref ω k #f)
++           (match (B γ k) [(binding ι (== n) _) ι] [_ #f])))
++     (match (and ι (B γ k))
++       [(binding (== ι) o s)
++        (define t (state-next γ))
++        (match (run Σ a t s)
++          [(list s* g out)
++           (θ← (next+1 (B← γ k (binding ι o s*)))
++               n (Loading (κ out) (cons (UOp k ι t g) acc) ω))]
++          [#f (fail 'EOp (next+1 γ))])]
++       [_ (fail 'EUnresolved)])]   ;解析失败视为失败
++    ;要求 k ∈ p(c_n) 且 B(k) 未定义; 以 ι := next 为编号令 B(k) ← ⟨ι, n, s⟩
++    [(Provide k s P*)
++     (if (and (member k (component-p (prog c))) (not (B γ k)))
++         (let ([ι (state-next γ)])
++           (θ← (next+1 (B← γ k (binding ι n s)))
++               n (Loading P* (cons (UProv k ι) acc) ω)))
++         (fail 'EConflict))]))
+ 
+ (define (run-labels Σ prog γ ℓs)
+   (for/fold ([γ γ]) ([ℓ ℓs]) #:break (not γ) (step Σ prog γ ℓ)))
+@@ -288,19 +350,49 @@
+ ;;; ======== 6 元理论: 可运行的检查 ========
+ 
+ ;;; 6.1 保持性: 不变式 WF; 返回违反的条目 (空表即成立). 条目编号与 programs/cordis1.rkt 一致,
+-;;; 本层只有第1条.
++;;; 本层没有第2条.
+ (define (wf-violations prog γ)
+   (define next (state-next γ))
++  (define (d n) (component-d (prog (fiber-c (F γ n)))))
++  (define (p n) (component-p (prog (fiber-c (F γ n)))))
++  (define (acc n) (acc-of (fiber-θ (F γ n))))
+   (define ns (sort (hash-keys (state-F γ)) <))
+   (define bad '())
+   (define (check! ok? fmt . args)
+     (unless ok? (set! bad (cons (apply format fmt args) bad))))
+-  ;1 dom F 中的名字都小于 next
++  ;1 dom F 中的名字, B 中的提供编号都小于 next
+   (for ([n ns])
+     (check! (< n next) "1: 名字 ~a" n))
++  (for ([(k b) (state-B γ)]) (check! (< (binding-ι b) next) "1: 编号 ~a" (binding-ι b)))
++  ;3 现存 fiber 的 p 两两不相交
++  (for* ([n ns] [m ns] #:when (< n m))
++    (check! (null? (set-intersect (p n) (p m))) "3: ~a 与 ~a 的 p 相交" n m))
++  (for ([n ns] #:when (installed? γ n))
++    (define ω (ω-of (fiber-θ (F γ n))))
++    ;4 已解析的每个依赖都有绑定, 编号与视图一致, 提供者不是自己
++    (for ([(k ι) ω])
++      (check! (match (B γ k) [(binding (== ι) o _) (not (= o n))] [_ #f])
++              "4: fiber ~a 的依赖 ~a" n k))
++    ;5 已安装 fiber 的视图的键恰为 d
++    (check! (set=? (hash-keys ω) (d n)) "5: fiber ~a 的视图" n))
++  ;6 每个绑定的提供者 q 存在, 已安装, k ∈ p(c_q), 且 q 的累加器中有对应的 UProv
++  (for ([(k b) (state-B γ)])
++    (match-define (binding ι o _) b)
++    (check! (and (installed? γ o) (member k (p o)) (member (UProv k ι) (acc o)))
++            "6: 绑定 ~a" k))
++  (for ([n ns])
++    (define provs (filter UProv? (acc n)))
++    ;7 累加器中的每个 UProv k ι 都对应一个现存绑定, 编号为 ι, 提供者为自己
++    (for ([u provs])
++      (match-define (UProv k ι) u)
++      (check! (match (B γ k) [(binding (== ι) (== n) _) #t] [_ #f])
++              "7: fiber ~a 的 UProv ~a" n k))
++    ;8 一个累加器中每个键至多有一个 UProv
++    (check! (= (length provs) (length (remove-duplicates (map UProv-k provs))))
++            "8: fiber ~a" n))
+   (reverse bad))
+ 
+-;来源不变式中能直接检查的部分; 返回违反的条目.
++;来源不变式与编号不变式中能直接检查的部分; 返回违反的条目.
+ (define (inv-violations γ)
+   (define next (state-next γ))
+   (define bad '())
+@@ -308,20 +400,24 @@
+     (unless ok? (set! bad (cons (apply format fmt args) bad))))
+   (define ops
+     (for*/list ([(n f) (state-F γ)] [u (acc-of (fiber-θ f))] #:when (UOp? u)) (cons n u)))
+-  ;来源2 (前半): 每个 UOp k t g 有 t < next
++  ;来源2 (前半): 每个 UOp k ι t g 有 ι, t < next
+   (for ([nu ops])
+-    (match-define (cons n (UOp _ t _)) nu)
+-    (check! (< t next) "来源2: fiber ~a 的 UOp ~a" n t))
++    (match-define (cons n (UOp _ ι t _)) nu)
++    (check! (and (< ι next) (< t next)) "来源2: fiber ~a 的 UOp ~a ~a" n ι t))
+   ;来源3: 不同 fiber 的 UOp 项所用的令牌互不相同
+   (for* ([x ops] [y ops] #:when (< (car x) (car y)))
+     (check! (not (= (UOp-t (cdr x)) (UOp-t (cdr y))))
+             "来源3: fiber ~a 与 ~a 共用令牌 ~a" (car x) (car y) (UOp-t (cdr x))))
++  ;编号1: 不同绑定的提供编号不同
++  (define ιs (map binding-ι (hash-values (state-B γ))))
++  (check! (= (length ιs) (length (remove-duplicates ιs))) "编号1: ~a" ιs)
+   (reverse bad))
+ 
+ ;;; 6.3 恢复精确性: 存储, 待撤销操作, 影子存储
+ 
+-;store(γ): k ↦ 服务状态
+-(define (store γ) (state-B γ))
++;store(γ): k ↦ 当前绑定的服务状态
++(define (store γ)
++  (for/hash ([(k b) (state-B γ)]) (values k (binding-s b))))
+ (define (store≃ Σ σ1 σ2)
+   (and (set=? (hash-keys σ1) (hash-keys σ2))
+        (for/and ([(k s) σ1]) (≃ Σ s (hash-ref σ2 k)))))
+@@ -340,18 +436,24 @@
+        ;m 的 L-Step 在键 k 上以令牌 t 成功运行了 a: 若 m ≠ n, σ^(k) 有定义,
+        ;且 a 在 σ^(k) 上成功, 则令 σ^(k) ← s'; 否则不变 (在定理的假设下不会出现).
+        ;运行失败的 L-Step 转入 Unloading, 落到最后一支, σ^ 不变.
+-       [((Loading (Call k a _) _) (Loading _ (cons (UOp k t _) _)))
++       [((Loading (Call k a _) _ _) (Loading _ (cons (UOp k _ t _) _) _))
+         (match (and (not (= m n)) (hash-has-key? σ^ k) (run Σ a t (hash-ref σ^ k)))
+           [(list s* _ _) (hash-set σ^ k s*)]
+           [#f σ^])]
++       ;Provide 步以初始状态 s 建立键 k 的绑定
++       [((Loading (Provide k s _) _ _) (Loading _ (cons (UProv k _) _) _))
++        (hash-set σ^ k s)]
+        [(_ _) σ^])]
+     [(L-Undo m)
+      (match (fiber-θ (F γ m))
+-       ;别的 fiber 撤销 UOp k t g
+-       [(Unloading (cons (UOp k _ g) _) _)
+-        (if (and (not (= m n)) (hash-has-key? σ^ k))
++       ;别的 fiber 撤销 UOp k ι t g 并作用于现存的绑定
++       [(Unloading (cons (UOp k ι _ g) _) _ _)
++        (if (and (not (= m n)) (match (B γ k) [(binding (== ι) _ _) #t] [_ #f])
++                 (hash-has-key? σ^ k))
+             (hash-set σ^ k (g (hash-ref σ^ k)))
+             σ^)]
++       ;撤销 UProv k ι 删除绑定
++       [(Unloading (cons (UProv k _) _) _ _) (hash-remove σ^ k)]
+        [_ σ^])]
+     [_ σ^]))
+ 
+@@ -376,7 +478,7 @@
+     (match f
+       [(fiber _ #f (Inactive (? symbol?))) #t]                           ;失败并停下
+       [(fiber _ #f (Inactive #f)) (not (target prog γ n))]               ;不该运行
+-      [(fiber _ _ (Active _)) (target prog γ n)]                         ;该运行
++      [(fiber _ _ (Active _ ω)) (equal? (target prog γ n) ω)]            ;该运行且视图正确
+       [_ #f])))
+ 
+ ;;; ======== 调度 (不在演算之内) ========
+@@ -422,12 +524,19 @@
+ 
+ ;PEff(Γ) = Γ -> Maybe (Γ × End Γ); 结果是 (list δ g) 或 #f
+ (define ((η) γ) (list γ id))
++(define ((◇ e1 e2) γ)
++  (match (e2 γ)
++    [(list δ g) (match (e1 δ) [(list ε h) (list ε (compose g h))] [#f #f])]
++    [#f #f]))
+ ;a : Γ -> Maybe (Γ × End Γ × Out), κ : Out -> PEff Γ
+ (define ((bind a κ) γ)
+   (match (a γ)
+     [(list δ g o) (match ((κ o) δ) [(list ε h) (list ε (compose g h))] [#f #f])]
+     [#f #f]))
+ ;存储 Store = K ⇀ S, 用不可变 hash 表示
++(define ((set-k k s) σ)
++  (and (not (hash-has-key? σ k))
++       (list (hash-set σ k s) (λ (σ*) (hash-remove σ* k)))))
+ (define ((lift Σ k a t) σ)
+   (and (hash-has-key? σ k)
+        (match (run Σ a t (hash-ref σ k))
+@@ -441,12 +550,14 @@
+   (match P
+     [(Done) (η)]
+     [(Fail) (λ (σ) #f)]
+-    [(Call k a κ) (bind (lift Σ k a t) (λ (o) (den Σ (κ o) (add1 t))))]))
++    [(Call k a κ) (bind (lift Σ k a t) (λ (o) (den Σ (κ o) (add1 t))))]
++    [(Provide k s P*) (◇ (den Σ P* (add1 t)) (set-k k s))]))
+ 
+ ;撤销项作用在存储上; 累加器按 LIFO 复合 (表头最先施加)
+ (define (undo->store u)
+   (match u
+-    [(UOp k _ g) (λ (σ) (if (hash-has-key? σ k) (hash-set σ k (g (hash-ref σ k))) σ))]))
++    [(UOp k _ _ g) (λ (σ) (if (hash-has-key? σ k) (hash-set σ k (g (hash-ref σ k))) σ))]
++    [(UProv k _) (λ (σ) (hash-remove σ k))]))
+ (define ((acc->store acc) σ)
+   (for/fold ([σ σ]) ([u acc]) ((undo->store u) σ)))
+ 
+@@ -457,33 +568,42 @@
+ (define (reg x v) (inl (Register x v)))
+ (define (on c) (inr (On c)))
+ 
+-;本层的存储在初始状态给定
+-(define σ0 (hash 'tools (inl (hash)) 'events (inr '())))
+-
+ (define components
+   (hash
+-   'shell (make-component '(tools)
++   'core (make-component '() '(tools) (program (serve 'tools (inl (hash))) (Done)))
++   ;提供 tools 之后自己再登记一个条目, 用来检查守卫作用于整个卸载
++   'core+ (make-component '() '(tools)
++                          (program (serve 'tools (inl (hash)))
++                                   ('tools (reg "builtin" "内建"))
++                                   (Done)))
++   'shell (make-component '(tools) '()
+                           (program ('tools (reg "ls" "列出文件"))
+                                    ('tools (reg "cat" "打印文件"))
+                                    (Done)))
+-   'git (make-component '(tools) (program ('tools (reg "git" "版本控制")) (Done)))
++   'git (make-component '(tools) '() (program ('tools (reg "git" "版本控制")) (Done)))
+    ;先登记 grep, 再登记已被占用的 ls -> EOp; grep 会被撤掉
+-   'bad (make-component '(tools)
++   'bad (make-component '(tools) '()
+                         (program ('tools (reg "grep" "搜索"))
+                                  ('tools (reg "ls" "冒牌 ls"))
+                                  (Done)))
+-   'ping (make-component '(events) (program ('events (on "ping")) (Done)))
++   ;提供自己的键并在上面操作: Call 的键不在 d 中, 查当前绑定, 提供者必须是自己
++   'local (make-component '() '(local)
++                          (program (serve 'local (inl (hash)))
++                                   ('local (reg "x" 1))
++                                   (Done)))
++   'bus (make-component '() '(events) (program (serve 'events (inr '())) (Done)))
++   'ping (make-component '(events) '() (program ('events (on "ping")) (Done)))
+    ;按回调注册 (Cordis 的旧做法): 恢复精确性的反例
+-   'old-ping (make-component '(events) (program ('events (inr (OnByCallback "ping"))) (Done)))))
++   'old-ping (make-component '(events) '() (program ('events (inr (OnByCallback "ping"))) (Done)))))
+ (define (prog c) (hash-ref components c))
+ 
+ (define (tools-of γ)
+-  (match (B γ 'tools) [(inl s) (sort (hash-keys s) string<?)] [#f #f]))
++  (match (B γ 'tools) [(binding _ _ (inl s)) (sort (hash-keys s) string<?)] [#f #f]))
+ (define (handlers-of γ)
+-  (match (B γ 'events) [(inr s) (sort (map cdr s) string<?)] [#f #f]))
++  (match (B γ 'events) [(binding _ _ (inr s)) (sort (map cdr s) string<?)] [#f #f]))
+ ;事件表里各项的令牌
+ (define (tokens-of γ)
+-  (match (B γ 'events) [(inr s) (sort (map car s) <)] [#f #f]))
++  (match (B γ 'events) [(binding _ _ (inr s)) (sort (map car s) <)] [#f #f]))
+ ;组件为 c 的第一个 fiber
+ (define (fiber-of γ c)
+   (for/first ([n (names γ)] #:when (match (F γ n) [(fiber (== c) _ _) #t] [_ #f])) n))
+@@ -491,9 +611,9 @@
+ (define (θ-tag θ)
+   (match θ
+     [(Inactive ζ) (if ζ (format "Inactive(~a)" ζ) "Inactive")]
+-    [(Loading _ _) "Loading"]
+-    [(Active _) "Active"]
+-    [(Unloading _ ζ) (if ζ (format "Unloading(~a)" ζ) "Unloading")]))
++    [(Loading _ _ _) "Loading"]
++    [(Active _ _) "Active"]
++    [(Unloading _ _ ζ) (if ζ (format "Unloading(~a)" ζ) "Unloading")]))
+ 
+ (define (show γ)
+   (printf "  -- F:")
+@@ -503,13 +623,14 @@
+             (θ-tag θ)))
+   (newline)
+   (printf "  -- B:")
+-  (for ([(k s) (state-B γ)])
+-    (printf " ~a=~a" k
+-            (match s [(inl s) (sort (hash-keys s) string<?)] [(inr s) s])))
++  (when (zero? (hash-count (state-B γ))) (printf " (无)"))
++  (for ([(k b) (state-B γ)])
++    (printf " ~a=⟨~a, ~a, ~a⟩" k (binding-ι b) (binding-q b)
++            (match (binding-s b) [(inl s) (sort (hash-keys s) string<?)] [(inr s) s])))
+   (newline))
+ 
+ (module+ main
+-  (define γ (init σ0))
++  (define γ init)
+   (define (scene title . ℓs)
+     (printf "\n== ~a\n" title)
+     (for ([ℓ ℓs])
+@@ -522,18 +643,21 @@
+       (printf "  !! 不变式不成立: ~a\n" (wf-violations prog γ))))
+   (define (insert c) (λ (γ) (O-Insert c)))
+   (define ((by c make) γ) (make (fiber-of γ c)))
+-  (scene "装 shell 和 git" (insert 'shell) (insert 'git))
++  (scene "先装依赖者 shell, git, 再装提供者 core"
++         (insert 'shell) (insert 'git) (insert 'core))
++  (scene "重启 core: 依赖者先 L-Leave, core 在它们卸载完之前什么都不撤 (守卫 held), 再以新编号提供"
++         (by 'core O-Restart))
+   (scene "装 bad: 第二次 Register 失败, 撤掉已登记的 grep, 停在 Inactive(EOp)" (insert 'bad))
+   (scene "O-Reset bad: 重试, 再次失败" (by 'bad O-Reset))
+-  (scene "重启 git: 撤掉自己的条目, 再登记一次" (by 'git O-Restart))
+   (scene "移除 shell: 只撤掉 shell 登记的条目" (by 'shell O-Dispose))
+-  (scene "装两个 ping: 同一个回调登记两次" (insert 'ping) (insert 'ping))
++  (scene "装 local: 在自己提供的键上操作" (insert 'local))
++  (scene "装 bus 和两个 ping: 同一个回调登记两次" (insert 'bus) (insert 'ping) (insert 'ping))
+   (scene "移除第一个 ping: 令牌让撤销只删它自己那一项" (by 'ping O-Dispose)))
+ 
+ (module+ test
+   (require rackunit)
+ 
+-  (define γ0 (init σ0))
++  (define γ0 init)
+   (define (orch γ . ℓs) (for/fold ([γ γ]) ([ℓ ℓs]) (orchestrate Σ prog γ ℓ)))
+   (define (go γ)
+     (define-values (γ* _) (settle Σ prog γ))
+@@ -559,22 +683,54 @@
+   (check-true (witnessed-at? Σ (reg "x" 1) 0 (inl (hash))))
+   (check-true (witnessed-at? Σ (on "c") 0 (inr '())))
+ 
+-  ;;; 程序: Prog(d) 的限制由构造保证
+-  (check-exn #rx"Call" (λ () (make-component '() (program ('tools (reg "x" 1)) (Done)))))
++  ;;; 程序: Prog(d,p) 的限制由构造保证
++  (check-exn #rx"Provide" (λ () (make-component '(tools) '() (program (serve 'tools (inl (hash))) (Done)))))
++  (check-exn #rx"Call" (λ () (make-component '() '() (program ('tools (reg "x" 1)) (Done)))))
+   ;延续中的违反在展开到那一段时才发现
+-  (let ([c (make-component '(tools) (program ('tools (reg "x" 1)) ('events (on "c")) (Done)))])
++  (let ([c (make-component '(tools) '() (program ('tools (reg "x" 1)) (serve 'tools #f) (Done)))])
+     (match (component-body c)
+-      [(Call _ _ κ) (check-exn #rx"Call" (λ () (κ #f)))]))
++      [(Call _ _ κ) (check-exn #rx"Provide" (λ () (κ #f)))]))
+ 
+   ;;; 规则
+-  ;存储中没有所需的键: 不能 L-Begin
+-  (check-false (step Σ prog (orch (init (hash)) (O-Insert 'shell)) (L-Begin 0)))
+-  (let ([γ (run-labels Σ prog (orch γ0 (O-Insert 'shell))
+-                       (list (L-Begin 0) (L-Step 0) (L-Step 0) (L-Step 0)))])
+-    (check-true (quiet? Σ prog γ))
+-    (check-equal? (tools-of γ) '("cat" "ls")))
++  ;没有提供者: 依赖者停在 Inactive, 这也是 settled
++  (check-equal? (fiber-θ (F (go (orch γ0 (O-Insert 'shell))) 0)) (Inactive #f))
++  ;依赖者在提供者 Active 之前不能 L-Begin
++  (let ([γ (orch γ0 (O-Insert 'shell) (O-Insert 'core))])
++    (check-false (step Σ prog γ (L-Begin 0)))
++    (define γ* (run-labels Σ prog γ (list (L-Begin 1) (L-Step 1) (L-Step 1)
++                                          (L-Begin 0) (L-Step 0) (L-Step 0) (L-Step 0))))
++    (check-true (quiet? Σ prog γ*))
++    (check-equal? (tools-of γ*) '("cat" "ls")))
++  ;守卫作用于整个卸载: core+ 在提供之后登记了 builtin; 重启时只要 shell 还解析着 tools,
++  ;core+ 连 builtin 也不撤, shell 卸载时看到的是 core+ 的全部效应
++  (let* ([γ (go (orch γ0 (O-Insert 'core+) (O-Insert 'shell)))]
++         [γ (orch γ (O-Restart 0))])
++    (check-false (step Σ prog γ (L-Undo 0)))
++    (define γ1 (run-labels Σ prog γ (list (L-Leave 1) (L-Undo 1) (L-Undo 1))))
++    (check-equal? (tools-of γ1) '("builtin"))
++    (check-false (step Σ prog γ1 (L-Undo 0)))          ;shell 还没卸载完
++    (define γ2 (run-labels Σ prog γ1 (list (L-Unloaded 1))))
++    (check-true (and (step Σ prog γ2 (L-Undo 0)) #t))
++    (check-equal? (tools-of (go γ2)) '("builtin" "cat" "ls")))
++  ;O-Insert 要求不冲突
++  (check-false (step Σ prog (orch γ0 (O-Insert 'core)) (O-Insert 'core)))
++  ;EConflict: 一个程序两次提供同一个键; EUnresolved: 在自己还没提供的键上操作
++  (let* ([extra (hash 'dup (make-component '() '(k)
++                                           (program (serve 'k (inl (hash)))
++                                                    (serve 'k (inl (hash)))
++                                                    (Done)))
++                      'early (make-component '() '(k)
++                                             (program ('k (reg "x" 1))
++                                                      (serve 'k (inl (hash)))
++                                                      (Done))))]
++         [prog* (λ (c) (hash-ref extra c (λ () (prog c))))])
++    (define (run-alone c)
++      (define-values (γ _) (settle Σ prog* (orchestrate Σ prog* γ0 (O-Insert c))))
++      (fiber-θ (F γ 0)))
++    (check-equal? (run-alone 'dup) (Inactive 'EConflict))
++    (check-equal? (run-alone 'early) (Inactive 'EUnresolved)))
+ 
+-  (define γ1 (go (orch γ0 (O-Insert 'shell) (O-Insert 'git))))
++  (define γ1 (go (orch γ0 (O-Insert 'shell) (O-Insert 'git) (O-Insert 'core))))
+   (check-equal? (tools-of γ1) '("cat" "git" "ls"))
+   ;失败的 fiber 撤掉已做的操作, 停在 Inactive ξ; O-Reset 后重试, 再次失败
+   (define γ2 (go (orch γ1 (O-Insert 'bad))))
+@@ -585,15 +741,18 @@
+   (define γ3 (go (orch γ2 (O-Reset bad))))
+   (check-equal? (fiber-θ (F γ3 bad)) (Inactive 'EOp))
+   (check-equal? (tools-of γ3) '("cat" "git" "ls"))
+-  ;O-Restart: 结果不变
+-  (define γ4 (go (orch γ3 (O-Restart (fiber-of γ3 'git)))))
++  ;O-Restart: 结果不变, 提供编号改变
++  (define γ4 (go (orch γ3 (O-Restart (fiber-of γ3 'core)))))
+   (check-equal? (tools-of γ4) '("cat" "git" "ls"))
++  (check-not-equal? (binding-ι (B γ4 'tools)) (binding-ι (B γ3 'tools)))
+   ;O-Dispose: 只撤掉自己的条目, fiber 被移除
+   (define γ5 (go (orch γ4 (O-Dispose (fiber-of γ4 'shell)))))
+   (check-equal? (tools-of γ5) '("git"))
+   (check-false (fiber-of γ5 'shell))
++  ;在自己提供的键上操作
++  (check-equal? (binding-s (B (go (orch γ5 (O-Insert 'local))) 'local)) (inl (hash "x" 1)))
+   ;同一个回调登记两次, 令牌让撤销只删自己那一项
+-  (define γ6 (go (orch γ5 (O-Insert 'ping) (O-Insert 'ping))))
++  (define γ6 (go (orch γ5 (O-Insert 'bus) (O-Insert 'ping) (O-Insert 'ping))))
+   (check-equal? (handlers-of γ6) '("ping" "ping"))
+   (define γ7 (go (orch γ6 (O-Dispose (fiber-of γ6 'ping)))))
+   (check-equal? (handlers-of γ7) '("ping"))
+@@ -606,15 +765,18 @@
+   ;;; 保持性, 进展与恢复精确性: 随机调度的执行
+   ;不含 bad, 以满足假设(H): 可能相遇的登记名字都不同
+   ;先一起插入三个组件再开始调度, 它们的加载步才会交错
+-  (define γ-start (orch γ0 (O-Insert 'shell) (O-Insert 'ping) (O-Insert 'git)))
++  (define γ-start (orch γ0 (O-Insert 'shell) (O-Insert 'ping) (O-Insert 'core)))
+   (define recovery-script
+     (list
++          (λ (γ) (O-Insert 'bus)) (λ (γ) (O-Insert 'git)) (λ (γ) (O-Insert 'local))
+           (λ (γ) (O-Insert 'ping))
++          (λ (γ) (O-Restart (fiber-of γ 'core)))
+           (λ (γ) (O-Restart (fiber-of γ 'git)))
+           (λ (γ) (O-Dispose (fiber-of γ 'ping)))
+           (λ (γ) (O-Dispose (fiber-of γ 'shell)))
+           (λ (γ) (O-Restart (fiber-of γ 'ping)))
+-          (λ (γ) (O-Dispose (fiber-of γ 'git)))))
++          (λ (γ) (O-Dispose (fiber-of γ 'git)))
++          (λ (γ) (O-Restart (fiber-of γ 'bus)))))
+   ;这些执行确实各不相同, 不是同一个调度跑了六十遍
+   (check-true (> (set-count
+                   (for/set ([seed (in-range 60)])
+@@ -639,16 +801,17 @@
+   ;反例: 按回调注册的逆不是精确的. 两个 old-ping 之后移除第二个,
+   ;删掉的却是第一个的钩子, 存储与"第二个从没运行过"不同
+   (let-values ([(γs ℓs) (run-script Σ prog γ0
+-                                    (list (λ (γ) (O-Insert 'old-ping))
++                                    (list (λ (γ) (O-Insert 'bus))
++                                          (λ (γ) (O-Insert 'old-ping))
+                                           (λ (γ) (O-Insert 'old-ping))
+                                           (λ (γ) (O-Dispose (last (sort (hash-keys (state-F γ)) <)))))
+                                     car)])
+-    (check-match (recovery-failures Σ γs ℓs) (list (cons 2 _))))
++    (check-match (recovery-failures Σ γs ℓs) (list (cons 4 _))))
+ 
+   ;;; 附录A: 单独加载与程序的解释一致
+   ;base 中已有 shell 登记的 ls, 所以 bad 的解释失败, 单独加载也失败
+-  (define base (go (orch γ0 (O-Insert 'shell))))
+-  (for ([c '(git ping bad)])
++  (define base (go (orch γ0 (O-Insert 'core) (O-Insert 'bus) (O-Insert 'shell))))
++  (for ([c '(git local ping bad)])
+     (define γ (orch base (O-Insert c)))
+     (define n (fiber-of γ c))
+     (define t (state-next γ))
+@@ -674,4 +837,4 @@
+          (check-true (store≃ Σ (undo τ) (g τ)) (~a c)))]
+       ;解释失败 (bad 的第二次 Register): 单独加载也失败
+       [#f (check-equal? c 'bad)
+-          (check-match (fiber-θ (F γ* n)) (Unloading _ 'EOp))])))
++          (check-match (fiber-θ (F γ* n)) (Unloading _ _ 'EOp))])))

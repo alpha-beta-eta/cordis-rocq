@@ -1,0 +1,386 @@
+--- L3.rkt	2026-11-25 03:30:21.489635900 +0800
++++ L4.rkt	2026-11-25 03:30:21.489635900 +0800
+@@ -1,14 +1,13 @@
+ #lang racket
+-;Cordis 的渐进原型, 第3层: 调度无关 (合流).
++;Cordis 的渐进原型, 第4层: 子 fiber (spawn).
+ ;各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 规则一条不改. 新的是问题: 同一组组件, 插入的次序和生命周期步的调度都任意,
+-;  最后静止的状态 (在观察之下: 不看名字和编号) 是否唯一?
+-;  这要求服务满足合流假设: 操作在 ≃ 下两两可交换, 逆不依赖于起点 (撤销独立).
+-;  新增两个服务: 监听器注册 (按多重集比较, 满足假设) 和变量存储 (不满足).
+-;本层的性质: 合流 —— 满足假设时, 任意插入次序与调度都静止于同一个观察;
+-;  两个反例: 有序事件总线 (分发看得到次序), 变量存储 (最后写的赢).
+-;  附录B: 观察等价 —— 用测试区分两个状态.
+-;引出下一层的问题: 组件在加载中自己装别的组件 (spawn), 生命期嵌套时, 这些性质还成立吗?
++;本层新增: 程序多了 Spawn c P: 加载中插入一个子 fiber, 它的父 fiber π 是自己, 累加器记下 USpawn m.
++;  子 fiber 的 p 与某个现存 fiber 的相交时, 父 fiber 以 EConflict 失败.
++;  子 fiber 的生命期不超过父 fiber: 父 fiber 卸载撤到 USpawn m 时, 先请子 fiber 退出
++;  (L-RetireChild), 等它被移除之后才能撤过去; 有子 fiber 的 fiber 不能被移除.
++;本层的性质: 保持性 (不变式多了第2条), 父 fiber 等子 fiber, 恢复精确性, 进展,
++;  合流 (子 fiber 也在观察之内), 附录A (spawn 对父 fiber 的存储没有效应).
++;引出下一层的问题: 子 fiber 只能在加载时装吗? 组件 Active 之后对事件的反应 (运行时效应) 呢?
+ ;记号: ⊥ / None 用 #f 表示.
+ (provide (all-defined-out))
+ 
+@@ -114,11 +113,12 @@
+ 
+ ;;; ======== 2 程序 ========
+ 
+-;P ::= Done | Fail | Call k a κ | Provide k s P
++;P ::= Done | Fail | Call k a κ | Provide k s P | Spawn c P
+ (struct Done () #:transparent)
+ (struct Fail () #:transparent)
+ (struct Call (k a κ) #:transparent)
+ (struct Provide (k s P) #:transparent)
++(struct Spawn (c P) #:transparent)
+ 
+ ;Prog(d,p): Call k 要求 k ∈ d ∪ p, Provide k 要求 k ∈ p; 延续也在 Prog(d,p) 中.
+ ;这里在构造组件时把程序包起来, 每展开一段就检查一段.
+@@ -133,12 +133,14 @@
+      (Call k a (λ (o) (Prog d p (κ o))))]
+     [(Provide k s P*)
+      (unless (member k p) (bad "Provide" k))
+-     (Provide k s (Prog d p P*))]))
++     (Provide k s (Prog d p P*))]
++    [(Spawn c P*) (Spawn c (Prog d p P*))]))
+ 
+ (define-syntax program
+-  (syntax-rules (serve <-)
++  (syntax-rules (serve spawn <-)
+     [(_ last) last]
+     [(_ (serve k s) rest ...) (Provide k s (program rest ...))]
++    [(_ (spawn c) rest ...) (Spawn c (program rest ...))]
+     [(_ (x <- k a) rest ...) (Call k a (λ (x) (program rest ...)))]
+     [(_ (k a) rest ...) (Call k a (λ (_) (program rest ...)))]))
+ 
+@@ -149,8 +151,8 @@
+ (define (make-component d p body)
+   (component d p (Prog d p body)))
+ 
+-;fiber ⟨c, τ, θ⟩: 组件, 已请求移除, 生命周期状态
+-(struct fiber (c τ θ) #:transparent)
++;fiber ⟨c, π, τ, θ⟩: 组件, 父fiber (根fiber为 'root), 已请求移除, 生命周期状态
++(struct fiber (c π τ θ) #:transparent)
+ ;绑定 ⟨ι, q, s⟩: 提供编号, 提供者的名字, 服务状态
+ (struct binding (ι q s) #:transparent)
+ ;状态 ⟨next, F, B⟩; F : N ⇀ Fiber, B : K ⇀ Binding
+@@ -164,9 +166,10 @@
+ (struct Active (acc ω) #:transparent)
+ (struct Unloading (acc ω ζ) #:transparent)
+ 
+-;u ::= UOp k ι t g | UProv k ι
++;u ::= UOp k ι t g | UProv k ι | USpawn m
+ (struct UOp (k ι t g) #:transparent)
+ (struct UProv (k ι) #:transparent)
++(struct USpawn (m) #:transparent)
+ 
+ (define (F γ n) (hash-ref (state-F γ) n #f))
+ (define (B γ k) (hash-ref (state-B γ) k #f))
+@@ -179,18 +182,18 @@
+ ;;; ======== 4 派生概念 ========
+ 
+ (define (installed? γ n)
+-  (match (F γ n) [(fiber _ _ θ) (not (Inactive? θ))] [#f #f]))
++  (match (F γ n) [(fiber _ _ _ θ) (not (Inactive? θ))] [#f #f]))
+ 
+ ;visible(k) = ι, 若 B(k) = ⟨ι, o, _⟩ 且 θ_o = Active; 否则 ⊥
+ (define (visible γ k)
+   (match (B γ k)
+-    [(binding ι o _) (match (F γ o) [(fiber _ _ (Active _ _)) ι] [_ #f])]
++    [(binding ι o _) (match (F γ o) [(fiber _ _ _ (Active _ _)) ι] [_ #f])]
+     [#f #f]))
+ 
+ ;target(n) = ⊥, 若 τ_n 或某个依赖不可见; 否则 k ∈ d(c_n) ↦ visible(k)
+ (define (target prog γ n)
+   (match (F γ n)
+-    [(fiber c τ _)
++    [(fiber c _ τ _)
+      (and (not τ)
+           (let ([ks (component-d (prog c))])
+             (and (andmap (λ (k) (visible γ k)) ks)
+@@ -228,13 +231,14 @@
+ (struct L-Divert (n) #:transparent)
+ (struct L-Leave (n) #:transparent)
+ (struct L-Undo (n) #:transparent)
++(struct L-RetireChild (n) #:transparent)
+ (struct L-Unloaded (n) #:transparent)
+ (struct L-Remove (n) #:transparent)
+ 
+ ;L(n): n 上的生命周期标签
+ (define (L n)
+   (list (L-Begin n) (L-Step n) (L-Divert n) (L-Leave n)
+-        (L-Undo n) (L-Unloaded n) (L-Remove n)))
++        (L-Undo n) (L-RetireChild n) (L-Unloaded n) (L-Remove n)))
+ 
+ ;状态更新 (文章中的 ←)
+ (define (F← γ n f)
+@@ -242,11 +246,11 @@
+ (define (B← γ k b)
+   (struct-copy state γ [B (if b (hash-set (state-B γ) k b) (hash-remove (state-B γ) k))]))
+ (define (θ← γ n θ)
+-  (match-define (fiber c τ _) (F γ n))
+-  (F← γ n (fiber c τ θ)))
++  (match-define (fiber c π τ _) (F γ n))
++  (F← γ n (fiber c π τ θ)))
+ (define (τ← γ n)
+-  (match-define (fiber c _ θ) (F γ n))
+-  (F← γ n (fiber c #t θ)))
++  (match-define (fiber c π _ θ) (F γ n))
++  (F← γ n (fiber c π #t θ)))
+ ;取 next 的当前值之后把 next 加一
+ (define (next+1 γ) (struct-copy state γ [next (add1 (state-next γ))]))
+ ;以 m := next 为名插入 f
+@@ -259,10 +263,10 @@
+   (define (exists? n) (and (F γ n) #t))
+   (match ℓ
+     ;;; 编排规则
+-    ;p(c) 不冲突: 以 m := next 为名插入 ⟨c, false, Inactive ⊥⟩
++    ;p(c) 不冲突: 以 m := next 为名插入 ⟨c, root, false, Inactive ⊥⟩
+     [(O-Insert c)
+      (and (not (conflict? prog γ c))
+-          (insert γ (fiber c #f (Inactive #f))))]
++          (insert γ (fiber c 'root #f (Inactive #f))))]
+     ;n ∈ dom F: τ_n ← true
+     [(O-Dispose n)
+      (and (exists? n) (τ← γ n))]
+@@ -323,15 +327,26 @@
+                   [(binding (== ι) o s) (continue (B← γ k (binding ι o (g s))))]
+                   [_ (continue γ)])]
+                ;删除 B(k); 由守卫, 没有 m ≠ n 满足 resolves(m, ι)
+-               [(UProv k ι) (continue (B← γ k #f))]))]
++               [(UProv k ι) (continue (B← γ k #f))]
++               ;要求 m ∉ dom F, 即子fiber已被移除
++               [(USpawn m) (and (not (exists? m)) (continue γ))]))]
++            [_ #f]))]
++    ;θ_n = Unloading (USpawn m :: acc) _ _, ¬held(n, USpawn m :: acc), m ∈ dom F 且 ¬τ_m: τ_m ← true
++    [(L-RetireChild n)
++     (and (exists? n)
++          (match (θ n)
++            [(Unloading (cons (USpawn m) acc) _ _)
++             (and (not (held? γ n (cons (USpawn m) acc)))
++                  (exists? m) (not (fiber-τ (F γ m))) (τ← γ m))]
+             [_ #f]))]
+     ;θ_n = Unloading [] ω ζ: θ_n ← Inactive ζ
+     [(L-Unloaded n)
+      (and (exists? n)
+           (match (θ n) [(Unloading '() _ ζ) (θ← γ n (Inactive ζ))] [_ #f]))]
+-    ;τ_n 且 θ_n = Inactive _: 删除 F(n)
++    ;τ_n, θ_n = Inactive _, 且没有 m 满足 π_m = n: 删除 F(n)
+     [(L-Remove n)
+      (and (exists? n) (fiber-τ (F γ n)) (Inactive? (θ n))
++          (not (for/or ([(m f) (state-F γ)]) (equal? (fiber-π f) n)))
+           (F← γ n #f))]))
+ 
+ ;L-Step 的各情况
+@@ -363,7 +378,14 @@
+          (let ([ι (state-next γ)])
+            (θ← (next+1 (B← γ k (binding ι n s)))
+                n (Loading P* (cons (UProv k ι) acc) ω)))
+-         (fail 'EConflict))]))
++         (fail 'EConflict))]
++    ;要求 p(c') 不冲突; 插入子fiber ⟨c', n, false, Inactive ⊥⟩, 名为 m := next
++    [(Spawn c* P*)
++     (if (conflict? prog γ c*)
++         (fail 'EConflict)
++         (let ([m (state-next γ)])
++           (θ← (insert γ (fiber c* n #f (Inactive #f)))
++               n (Loading P* (cons (USpawn m) acc) ω))))]))
+ 
+ (define (run-labels Σ prog γ ℓs)
+   (for/fold ([γ γ]) ([ℓ ℓs]) #:break (not γ) (step Σ prog γ ℓ)))
+@@ -374,8 +396,7 @@
+ 
+ ;;; ======== 6 元理论: 可运行的检查 ========
+ 
+-;;; 6.1 保持性: 不变式 WF; 返回违反的条目 (空表即成立). 条目编号与 programs/cordis1.rkt 一致,
+-;;; 本层没有第2条.
++;;; 6.1 保持性: 不变式 WF 的八条; 返回违反的条目 (空表即成立). 条目编号与 programs/cordis1.rkt 一致.
+ (define (wf-violations prog γ)
+   (define next (state-next γ))
+   (define (d n) (component-d (prog (fiber-c (F γ n)))))
+@@ -385,10 +406,18 @@
+   (define bad '())
+   (define (check! ok? fmt . args)
+     (unless ok? (set! bad (cons (apply format fmt args) bad))))
+-  ;1 dom F 中的名字, B 中的提供编号都小于 next
++  ;1 dom F 中的名字, B 中的提供编号, 各累加器的 USpawn 中的名字都小于 next
+   (for ([n ns])
+-    (check! (< n next) "1: 名字 ~a" n))
++    (check! (< n next) "1: 名字 ~a" n)
++    (for ([u (acc n)] #:when (USpawn? u))
++      (check! (< (USpawn-m u) next) "1: USpawn ~a" (USpawn-m u))))
+   (for ([(k b) (state-B γ)]) (check! (< (binding-ι b) next) "1: 编号 ~a" (binding-ι b)))
++  ;2 子fiber的父fiber存在, 已安装, 且累加器中有对应的 USpawn
++  (for ([m ns])
++    (match (fiber-π (F γ m))
++      ['root (void)]
++      [n (check! (and (installed? γ n) (member (USpawn m) (acc n)))
++                 "2: 子fiber ~a 的父fiber ~a" m n)]))
+   ;3 现存 fiber 的 p 两两不相交
+   (for* ([n ns] [m ns] #:when (< n m))
+     (check! (null? (set-intersect (p n) (p m))) "3: ~a 与 ~a 的 p 相交" n m))
+@@ -417,7 +446,9 @@
+             "8: fiber ~a" n))
+   (reverse bad))
+ 
+-;来源不变式与编号不变式中能直接检查的部分; 返回违反的条目.
++;来源不变式与编号与spawn不变式中能直接检查的部分; 返回违反的条目.
++;来源不变式第1条 (剩余程序是 body 的后段) 与第2条的后半 (g 是某个 a 给出的逆),
++;以及编号与spawn不变式第2条 (c_n 可能spawn c_m) 涉及程序的全部路径, 而延续是闭包, 不在此检查.
+ (define (inv-violations γ)
+   (define next (state-next γ))
+   (define bad '())
+@@ -450,7 +481,7 @@
+ ;n 有待撤销操作: 存在, 已安装, 累加器中有 UOp
+ (define (pending? γ n)
+   (match (F γ n)
+-    [(fiber _ _ θ) (and (not (Inactive? θ)) (ormap UOp? (acc-of θ)))]
++    [(fiber _ _ _ θ) (and (not (Inactive? θ)) (ormap UOp? (acc-of θ)))]
+     [#f #f]))
+ 
+ ;沿一步 γ --ℓ--> γ* 更新对 n 的影子存储 σ^ (假装 n 从来没有运行过的存储)
+@@ -501,17 +532,18 @@
+ (define (settled? prog γ)
+   (for/and ([(n f) (state-F γ)])
+     (match f
+-      [(fiber _ #f (Inactive (? symbol?))) #t]                           ;失败并停下
+-      [(fiber _ #f (Inactive #f)) (not (target prog γ n))]               ;不该运行
+-      [(fiber _ _ (Active _ ω)) (equal? (target prog γ n) ω)]            ;该运行且视图正确
++      [(fiber _ _ #f (Inactive (? symbol?))) #t]                           ;失败并停下
++      [(fiber _ _ #f (Inactive #f)) (not (target prog γ n))]               ;不该运行
++      [(fiber _ _ _ (Active _ ω)) (equal? (target prog γ n) ω)]            ;该运行且视图正确
+       [_ #f])))
+ 
+ ;;; 6.5 合流: 观察
+-;fiber 记为 (组件, 是否 Active), 绑定记为 (键, 提供者的组件, 规范化的状态), 各自排序.
++;fiber 记为 (组件, 父fiber的组件, 是否 Active), 绑定记为 (键, 提供者的组件, 规范化的状态), 各自排序.
+ ;名字和提供编号取决于插入与调度的次序, 不在观察之内.
+ (define (observe γ normalize)
++  (define (parent f) (match (fiber-π f) ['root 'root] [n (fiber-c (F γ n))]))
+   (list (sort (for/list ([(n f) (state-F γ)])
+-                (list (fiber-c f) (Active? (fiber-θ f))))
++                (list (fiber-c f) (parent f) (Active? (fiber-θ f))))
+               string<? #:key ~s)
+         (sort (for/list ([(k b) (state-B γ)])
+                 (list k (fiber-c (F γ (binding-q b))) (normalize (binding-s b))))
+@@ -605,13 +637,15 @@
+     [(Done) (η)]
+     [(Fail) (λ (σ) #f)]
+     [(Call k a κ) (bind (lift Σ k a t) (λ (o) (den Σ (κ o) (add1 t))))]
+-    [(Provide k s P*) (◇ (den Σ P* (add1 t)) (set-k k s))]))
++    [(Provide k s P*) (◇ (den Σ P* (add1 t)) (set-k k s))]
++    [(Spawn _ P*) (den Σ P* (add1 t))]))
+ 
+ ;撤销项作用在存储上; 累加器按 LIFO 复合 (表头最先施加)
+ (define (undo->store u)
+   (match u
+     [(UOp k _ _ g) (λ (σ) (if (hash-has-key? σ k) (hash-set σ k (g (hash-ref σ k))) σ))]
+-    [(UProv k _) (λ (σ) (hash-remove σ k))]))
++    [(UProv k _) (λ (σ) (hash-remove σ k))]
++    [(USpawn _) id]))
+ (define ((acc->store acc) σ)
+   (for/fold ([σ σ]) ([u acc]) ((undo->store u) σ)))
+ 
+@@ -654,6 +688,13 @@
+                         (program ('tools (reg "grep" "搜索"))
+                                  ('tools (reg "ls" "冒牌 ls"))
+                                  (Done)))
++   'grep-tool (make-component '(tools) '() (program ('tools (reg "grep" "搜索")) (Done)))
++   'sed-tool (make-component '(tools) '() (program ('tools (reg "sed" "流编辑")) (Done)))
++   'toolkit (make-component '(tools) '()
++                            (program (spawn 'grep-tool)
++                                     ('tools (reg "help" "工具箱帮助"))
++                                     (spawn 'sed-tool)
++                                     (Done)))
+    ;提供自己的键并在上面操作: Call 的键不在 d 中, 查当前绑定, 提供者必须是自己
+    'local (make-component '() '(local)
+                           (program (serve 'local (inl (hash)))
+@@ -674,7 +715,7 @@
+   (match (B γ 'events) [(binding _ _ (inr s)) (sort (map car s) <)] [#f #f]))
+ ;组件为 c 的第一个 fiber
+ (define (fiber-of γ c)
+-  (for/first ([n (names γ)] #:when (match (F γ n) [(fiber (== c) _ _) #t] [_ #f])) n))
++  (for/first ([n (names γ)] #:when (match (F γ n) [(fiber (== c) _ _ _) #t] [_ #f])) n))
+ 
+ (define (θ-tag θ)
+   (match θ
+@@ -686,8 +727,8 @@
+ (define (show γ)
+   (printf "  -- F:")
+   (for ([n (names γ)] #:when (F γ n))
+-    (match-define (fiber c τ θ) (F γ n))
+-    (printf " ~a#~a~a=~a" c n (if τ "(τ)" "")
++    (match-define (fiber c π τ θ) (F γ n))
++    (printf " ~a#~a~a~a=~a" c n (if (eq? π 'root) "" (format "(π=~a)" π)) (if τ "(τ)" "")
+             (θ-tag θ)))
+   (newline)
+   (printf "  -- B:")
+@@ -715,6 +756,9 @@
+          (insert 'shell) (insert 'git) (insert 'core))
+   (scene "重启 core: 依赖者先 L-Leave, core 在它们卸载完之前什么都不撤 (守卫 held), 再以新编号提供"
+          (by 'core O-Restart))
++  (scene "装 toolkit: 它在加载中 spawn 两个子fiber" (insert 'toolkit))
++  (scene "移除 toolkit: L-RetireChild 请 sed-tool 退出, 等它被 L-Remove 后再撤 help, 再到 grep-tool"
++         (by 'toolkit O-Dispose))
+   (scene "装 bad: 第二次 Register 失败, 撤掉已登记的 grep, 停在 Inactive(EOp)" (insert 'bad))
+   (scene "O-Reset bad: 重试, 再次失败" (by 'bad O-Reset))
+   (scene "移除 shell: 只撤掉 shell 登记的条目" (by 'shell O-Dispose))
+@@ -821,6 +865,18 @@
+       (fiber-θ (F γ 0)))
+     (check-equal? (run-alone 'dup) (Inactive 'EConflict))
+     (check-equal? (run-alone 'early) (Inactive 'EUnresolved)))
++  ;spawn: toolkit 在加载中装两个子fiber; 移除时子fiber先退出
++  (let* ([γ (go (orch γ0 (O-Insert 'core) (O-Insert 'toolkit)))]
++         [tk (fiber-of γ 'toolkit)])
++    (check-equal? (tools-of γ) '("grep" "help" "sed"))
++    (check-equal? (fiber-π (F γ (fiber-of γ 'grep-tool))) tk)
++    ;toolkit 撤到 USpawn 时, 子fiber还在: 不能撤过去, 只能请它退出
++    (define γd (run-labels Σ prog (orch γ (O-Dispose tk)) (list (L-Leave tk))))
++    (check-false (step Σ prog γd (L-Undo tk)))
++    (check-true (and (step Σ prog γd (L-RetireChild tk)) #t))
++    (define γ* (go γd))
++    (check-equal? (tools-of γ*) '())
++    (check-equal? (hash-count (state-F γ*)) 1))
+ 
+   (define γ1 (go (orch γ0 (O-Insert 'shell) (O-Insert 'git) (O-Insert 'core))))
+   (check-equal? (tools-of γ1) '("cat" "git" "ls"))
+@@ -861,8 +917,10 @@
+   (define recovery-script
+     (list
+           (λ (γ) (O-Insert 'bus)) (λ (γ) (O-Insert 'git)) (λ (γ) (O-Insert 'local))
++          (λ (γ) (O-Insert 'toolkit))
+           (λ (γ) (O-Insert 'ping))
+           (λ (γ) (O-Restart (fiber-of γ 'core)))
++          (λ (γ) (O-Dispose (fiber-of γ 'toolkit)))
+           (λ (γ) (O-Restart (fiber-of γ 'git)))
+           (λ (γ) (O-Dispose (fiber-of γ 'ping)))
+           (λ (γ) (O-Dispose (fiber-of γ 'shell)))
+@@ -903,7 +961,7 @@
+   ;;; 附录A: 单独加载与程序的解释一致
+   ;base 中已有 shell 登记的 ls, 所以 bad 的解释失败, 单独加载也失败
+   (define base (go (orch γ0 (O-Insert 'core) (O-Insert 'bus) (O-Insert 'shell))))
+-  (for ([c '(git local ping bad)])
++  (for ([c '(git toolkit local ping bad)])
+     (define γ (orch base (O-Insert c)))
+     (define n (fiber-of γ c))
+     (define t (state-next γ))
+@@ -937,7 +995,8 @@
+   (define conf-components
+     (hash
+      'core (hash-ref components 'core) 'shell (hash-ref components 'shell)
+-     'git (hash-ref components 'git)
++     'git (hash-ref components 'git) 'toolkit (hash-ref components 'toolkit)
++     'grep-tool (hash-ref components 'grep-tool) 'sed-tool (hash-ref components 'sed-tool)
+      'hub (make-component '() '(listeners) (program (serve 'listeners (inr '())) (Done)))
+      'lis (make-component '(listeners) '() (program ('listeners (inr (Listen "a"))) (Done)))
+      'lis2 (make-component '(listeners tools) '()
+@@ -949,7 +1008,7 @@
+     (match s
+       [(inl h) (sort (hash->list h) string<? #:key ~s)]
+       [(inr l) (sort l string<? #:key ~s)]))
+-  (define roots '(shell core git hub lis lis2 lis))
++  (define roots '(shell toolkit core git hub lis lis2 lis))
+   (define γ-static (assemble ΣC progC roots))
+   (check-false (has-failed? γ-static))
+   (define expected (observe γ-static normalize))

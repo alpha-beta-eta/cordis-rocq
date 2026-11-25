@@ -1,0 +1,307 @@
+--- M3.rkt	2026-11-25 03:28:48.808967500 +0800
++++ M4.rkt	2026-11-25 03:28:48.808967500 +0800
+@@ -1,13 +1,11 @@
+ #lang racket
+-;渐进的插件管理器, 第3层: 依赖变化.
++;渐进的插件管理器, 第4层: 子插件.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 每次提供服务都得到一个新编号; 实例开始加载时记下视图: 每个依赖用的是哪个编号.
+-;  settle! 不再只管加载: active 的实例发现视图过期 (依赖不再可用, 或换了编号, 或自己被要求移除) 就开始卸载;
+-;  卸载中的实例只要它提供的服务还被别的实例用着, 就什么都不撤 (守卫 held), 等使用者先卸载完.
+-;  所以 dispose! 一个提供者时, 使用者先卸载, 回到等待; 提供者回来后它们重新加载.
+-;  restart! 强制卸载后重新加载; reset! 让加载失败的实例重试.
+-;  插件市场, 自更新, 热重载这些编排者不需要新机制: 它们只是 install! dispose! restart! 的调用者.
+-;留给下一层的问题: 一个插件想把几个小插件打包装上, 让它们的生命期跟着自己.
++;本层新增: 程序多了 spawn: 插件在加载中装上一个子插件, 子实例记下父实例 (parent),
++;  父实例的撤销栈记下一项 undo-spawn. 子实例的生命期不超过父实例:
++;  父实例卸载撤到 undo-spawn 时, 先请子实例退出, 等它被移除了再往下撤; 有子实例的实例不能被移除.
++;  所以卸载不再总是一整段: 它可能停在一个还在的子实例前面, 等 settle! 先把子实例处理完.
++;留给下一层的问题: 子插件只能在加载时装. 插件上线之后, 每响应一个事件做的事 (运行时效应) 由谁来撤?
+ (provide (all-defined-out))
+ 
+ ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
+@@ -19,13 +17,17 @@
+ (struct Provide (key init next))
+ ;cont : value -> ir
+ (struct Op (key operation cont))
++;安装子插件child, 其生命期不超过当前实例
++(struct Spawn (child next))
+ (struct Done ())
+ (struct Fail (why))
+ (define-syntax prog
+-  (syntax-rules (serve <-)
++  (syntax-rules (serve spawn <-)
+     [(_ last) last]
+     [(_ (serve key init) rest ...)
+      (Provide key init (prog rest ...))]
++    [(_ (spawn child) rest ...)
++     (Spawn child (prog rest ...))]
+     [(_ (var <- key operation) rest ...)
+      (Op key operation (λ (var) (prog rest ...)))]
+     [(_ (key operation) rest ...)
+@@ -34,9 +36,9 @@
+ (struct plugin (name deps provides body))
+ ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
+ ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
+-;disposed? 表示已被要求移除
++;disposed? 表示已被要求移除; parent是父实例的id, 直接install!的实例为#f
+ (struct instance
+-  (plugin phase undo-stack view failure disposed?)
++  (plugin phase undo-stack view failure disposed? parent)
+   #:mutable)
+ (define instance-deps
+   (compose plugin-deps instance-plugin))
+@@ -54,6 +56,8 @@
+ ;tok是执行这次操作时用的令牌, used-id是操作时那个provision的编号
+ (struct undo-op (key used-id tok undo))
+ (struct undo-provide (key used-id))
++;安装过子实例child-id
++(struct undo-spawn (child-id))
+ ;provision包含自己的id, 实例owner的id, 以及服务的状态
+ (struct provision
+   (id owner [state #:mutable]))
+@@ -95,16 +99,20 @@
+                (and available-id
+                     (loop (cdr keys)
+                           (hash-set view (car keys) available-id))))))))
++;实例id是否还有子实例
++(define (has-children? m id)
++  (for/or ([i (in-hash-values (manager-instances m))])
++    (equal? (instance-parent i) id)))
+ ;与plug提供相同服务的现存实例, 没有则为#f
+ (define (provider-conflict m plug)
+   (for/first ([i (in-hash-values (manager-instances m))]
+               #:when (for/or ([key (plugin-provides plug)])
+                        (memq key (instance-provides i))))
+     i))
+-(define (add-instance! m plug)
++(define (add-instance! m plug parent)
+   (define id (fresh-id! m))
+   (hash-set! (manager-instances m) id
+-             (instance plug 'inactive '() #f #f #f))
++             (instance plug 'inactive '() #f #f #f parent))
+   id)
+ ;检查实例是否能够访问相应服务
+ ;如果可以就返回对应的provision
+@@ -161,7 +169,17 @@
+             (define new-id (fresh-id! m))
+             (hash-set! provisions key (provision new-id id init))
+             (push-undo! (undo-provide key new-id) i)
+-            (values next (format "提供 ~a (编号 ~a)" key new-id))])]))
++            (values next (format "提供 ~a (编号 ~a)" key new-id))])]
++    [(Spawn child next)
++     (cond [(provider-conflict m child)
++            => (λ (existing)
++                 (values #f (fail! (format "子插件 ~a 与 ~a 提供了相同的服务"
++                                           (plugin-name child) (instance-name existing))
++                                   i)))]
++           [else
++            (define child-id (add-instance! m child id))
++            (push-undo! (undo-spawn child-id) i)
++            (values next (format "安装子插件 ~a (实例 ~a)" (plugin-name child) child-id))])]))
+ 
+ ;检查编号为used-id的provision是否仍被其他实例使用
+ (define (in-use? m self-id used-id)
+@@ -185,7 +203,8 @@
+     (match entry
+       [(undo-provide _ used-id) (in-use? m id used-id)]
+       [_ #f])))
+-;弹出一项撤销; 撤销栈已空时返回 #f. 只在held?不成立时调用
++;弹出一项撤销 (遇到还在的子实例时先请它退出); 撤销栈已空, 或在等子实例时返回 #f.
++;只在held?不成立时调用
+ (define (undo-one! m i)
+   (define provisions
+     (manager-provisions m))
+@@ -214,14 +233,26 @@
+             (format "撤销提供 ~a (编号 ~a)" key used-id)]
+            [else
+             (set-instance-undo-stack! i rest)
+-            (format "跳过撤销提供: ~a (编号 ~a) 已不存在" key used-id)])]))
+-;按 LIFO 撤销全部
++            (format "跳过撤销提供: ~a (编号 ~a) 已不存在" key used-id)])]
++    [(cons (undo-spawn child-id) rest)
++     ;; 先请子实例退出, 等它真的被移除了再弹出这一项
++     (define child (instance-ref m child-id))
++     (cond [(not child)
++            (set-instance-undo-stack! i rest)
++            (format "子实例 ~a 已被移除, 弹出它的spawn项" child-id)]
++           [(not (instance-disposed? child))
++            (set-instance-disposed?! child #t)
++            (format "要求子实例 ~a (插件 ~a) 退出"
++                    child-id (instance-name child))]
++           [else #f])]))   ; 已经请它退出了, 等着
++;按 LIFO 撤销, 直到撤销栈空, 或要等一个子实例; 返回是否撤销了什么
+ (define (unload! m id i trace)
+-  (let loop ()
++  (let loop ([progressed #f])
+     (define message (undo-one! m i))
+-    (when message
+-      (trace id message)
+-      (loop))))
++    (cond [message
++           (trace id message)
++           (loop #t)]
++          [else progressed])))
+ 
+ ;加载实例: 以视图wanted把它的程序从头跑到尾; 失败时停在 unloading, 由 settle! 卸载
+ (define (load! m id i wanted trace)
+@@ -235,13 +266,17 @@
+     (trace id message)
+     (when next (loop next))))
+ 
+-;让实例做一件事: 整段加载, 开始卸载, 整段卸载, 或从管理器中移除; 无事可做时返回#f
++;让实例做一件事: 整段加载, 开始卸载, 一段卸载, 卸载完毕, 或从管理器中移除; 无事可做时返回#f
+ (define (step-instance! m id i trace)
+   (define name (instance-name i))
+   (define wanted (wanted-view m i))
+   (match (instance-phase i)
+     ['inactive
+-     (cond [(instance-disposed? i)
++     (cond [(and (instance-disposed? i) (has-children? m id))
++            ;有子实例的实例不能被移除 (防御性的检查: 按 LIFO 卸载到 inactive 时,
++            ;子实例都已经被移除了, 所以实际走不到这里)
++            #f]
++           [(instance-disposed? i)
+             (hash-remove! (manager-instances m) id)
+             (trace id (format "实例 ~a (插件 ~a) 已弃置且卸载完毕, 从管理器中移除"
+                               id name))
+@@ -267,8 +302,9 @@
+     ['active #f]
+     ['unloading
+      (cond [(held? m id i) #f]
++           [(pair? (instance-undo-stack i))
++            (unload! m id i trace)]
+            [else
+-            (unload! m id i trace)
+             (set-instance-phase! i 'inactive)
+             (trace id (if (instance-failure i)
+                           (format "卸载完毕 -> inactive (此次卸载由加载失败引起: ~a)"
+@@ -285,13 +321,14 @@
+       (loop))))
+ 
+ ;静止时每个实例都安定: 加载失败, 或应当不运行且未运行, 或以正确视图active;
+-;并且没有已弃置的实例
++;并且没有可以移除的实例 (已弃置, inactive, 没有子实例)
+ (define (settled? m)
+   (for/and ([(id i) (manager-instances m)])
+     (define wanted (wanted-view m i))
+     (match (instance-phase i)
+       ['inactive (and (or (instance-failure i) (not wanted))
+-                      (not (instance-disposed? i)))]
++                      (not (and (instance-disposed? i)
++                                (not (has-children? m id)))))]
+       ['active (equal? wanted (instance-view i))]
+       [_ #f])))
+ 
+@@ -323,7 +360,7 @@
+          => (λ (existing)
+               (error 'install! "~a 与 ~a 提供了相同的服务"
+                      (plugin-name plug) (instance-name existing)))])
+-  (define id (add-instance! m plug))
++  (define id (add-instance! m plug #f))
+   (trace id (format "装上实例 ~a (插件 ~a), 依赖 ~a" id (plugin-name plug) (plugin-deps plug)))
+   (settle! m #:trace trace)
+   id)
+@@ -366,7 +403,9 @@
+   (printf "  -- 实例:")
+   (for ([id (sort (hash-keys (manager-instances m)) <)])
+     (define i (instance-ref m id))
+-    (printf " ~a#~a=~a~a" (instance-name i) id (instance-phase i)
++    (printf " ~a#~a~a=~a~a" (instance-name i) id
++            (if (instance-parent i) (format "(父#~a)" (instance-parent i)) "")
++            (instance-phase i)
+             (cond [(instance-failure i) "(失败)"]
+                   [(eq? (instance-phase i) 'inactive) "(等待)"]
+                   [else ""])))
+@@ -413,6 +452,19 @@
+           (prog ('tools (register "grep" "搜索"))
+                 ('tools (register "ls" "冒牌 ls"))
+                 (Done))))
++;spawn: 父插件在加载中安装两个子插件, 中间自己再登记一个条目
++(define grep-tool
++  (plugin "grep-tool" '(tools) '()
++          (prog ('tools (register "grep" "搜索")) (Done))))
++(define sed-tool
++  (plugin "sed-tool" '(tools) '()
++          (prog ('tools (register "sed" "流编辑")) (Done))))
++(define toolkit
++  (plugin "toolkit" '(tools) '()
++          (prog (spawn grep-tool)
++                ('tools (register "help" "工具箱帮助"))
++                (spawn sed-tool)
++                (Done))))
+ (define bus
+   (plugin "bus" '() '(events)
+           (prog (serve 'events (hash))
+@@ -445,6 +497,12 @@
+          (λ () (dispose 'core)))
+   (scene "再装一个 core: 等待的 shell 和 git 重新加载"
+          (λ () (install 'core core)))
++  (scene "装 toolkit: 它在加载中装上两个子插件"
++         (λ () (install 'toolkit toolkit)))
++  (scene "重启 core: toolkit 和它的子插件也用 tools, 一起卸载再加载, 子插件换了新的实例"
++         (λ () (restart! m (hash-ref ids 'core) #:trace print-step)))
++  (scene "移除 toolkit: 按 LIFO 拆除, 先请 sed-tool 退出, 再撤 help, 再请 grep-tool 退出"
++         (λ () (dispose 'toolkit)))
+   (scene "装 bad: 加载失败, 停下"
+          (λ () (install 'bad bad)))
+   (scene "reset! bad: 重试, 再次失败"
+@@ -530,6 +588,58 @@
+     (check-false (findf (λ (s) (string-prefix? s "跳过")) messages))
+     (check-equal? (handlers-for m "tick") '("ping")))
+ 
++  ;; spawn: 子实例跟着父实例加载; 移除父实例时按 LIFO 拆除, 子实例先于父实例被移除
++  (let ([m (make-manager)] [log '()])
++    (define c (install! m core))
++    (define t (install! m toolkit))
++    (check-equal? (tools-of m) '("grep" "help" "sed"))
++    (check-equal? (hash-count (manager-instances m)) 4)
++    (define kids
++      (sort (for/list ([(id i) (manager-instances m)] #:when (equal? (instance-parent i) t)) id) <))
++    (check-equal? (length kids) 2)
++    (dispose! m t #:trace (λ (id message) (set! log (cons (cons id message) log))))
++    (check-equal? (tools-of m) '())
++    (check-equal? (hash-count (manager-instances m)) 1)
++    (define (index-of-step id prefix)
++      (for/first ([entry (reverse log)] [k (in-naturals)]
++                  #:when (and (= (car entry) id) (string-prefix? (cdr entry) prefix)))
++        k))
++    ;; 后装的 sed-tool 先退出; 父实例撤 help 在两个子实例之间; 父实例最后被移除
++    (check-true (< (index-of-step (cadr kids) "实例") (index-of-step t "撤销 tools")))
++    (check-true (< (index-of-step t "撤销 tools") (index-of-step (car kids) "实例")))
++    (check-true (< (index-of-step (car kids) (format "实例 ~a (插件 grep-tool) 已弃置" (car kids)))
++                   (index-of-step t (format "实例 ~a (插件 toolkit) 已弃置" t))))
++    (check-true (settled? m)))
++
++  ;; 重启提供者: 父子实例都用着 tools, 一起卸载再加载; 结果不变
++  (let ([m (make-manager)])
++    (define c (install! m core))
++    (define t (install! m toolkit))
++    (restart! m c)
++    (check-equal? (tools-of m) '("grep" "help" "sed"))
++    (check-equal? (hash-count (manager-instances m)) 4)
++    (check-true (settled? m)))
++
++  ;; 单独移除一个启动时装的子实例: 父实例不受影响; 之后移除父实例时弹出失效的spawn项
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (define t (install! m toolkit))
++    (define grep-id
++      (for/first ([(id i) (manager-instances m)]
++                  #:when (equal? (instance-name i) "grep-tool"))
++        id))
++    (dispose! m grep-id)
++    (check-equal? (tools-of m) '("help" "sed"))
++    (check-eq? (instance-phase (instance-ref m t)) 'active)
++    (dispose! m t)
++    (check-equal? (tools-of m) '()))
++
++  ;; 子插件与现存实例提供相同的服务: 父实例加载失败
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (define p (install! m (plugin "bundle" '() '() (prog (spawn core) (Done)))))
++    (check-equal? (instance-failure (instance-ref m p)) "子插件 core 与 core 提供了相同的服务"))
++
+   ;; 令牌: 同一个处理器登记两次, 移除第一个, 留下的是第二个的那一项
+   (let ([m (make-manager)])
+     (define p1 (install! m ping))

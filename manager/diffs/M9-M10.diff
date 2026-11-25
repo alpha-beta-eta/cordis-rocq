@@ -1,0 +1,379 @@
+--- M9.rkt	2026-11-25 03:28:48.810636100 +0800
++++ M10.rkt	2026-11-25 03:28:48.810636100 +0800
+@@ -1,18 +1,16 @@
+ #lang racket
+-;渐进的插件管理器, 第9层: ctx 与 apply.
++;渐进的插件管理器, 第10层: 配置.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 插件不再写成程序 (数据), 而是像 Cordis 那样写成 apply: 拿到 ctx 的一段普通代码.
+-;  ctx 上的调用: ctx-use (在服务上操作, 返回结果), ctx-provide, ctx-plugin, ctx-on, ctx-has?.
+-;  apply 正常返回就是加载完毕; 抛出异常就是加载失败, 已做的同样撤掉.
+-;  管理器的其余部分几乎不变: 运行时用定界续延 (shift/reset) 把 apply 变回前几层的程序 ——
+-;  每次 ctx 调用中止到 apply 外面, 交出一条指令和"从这里继续"的续延. 所以 ctx 调用就是 await 点:
+-;  一次 ctx 调用之后的代码, 在执行这条指令的那一步里、指令执行之后才运行 (直到下一次调用);
+-;  别的插件和编排操作只能插在调用之间. (为此 Provide 和 Spawn 的 next 改成了续延.)
+-;  apply 抛出的任何值都是加载失败. 被服务拒绝的操作不在 apply 里抛出, 而是直接让加载失败,
+-;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). parameterize 只对 apply 的代码有效.
+-;  ctx 只能在它所属实例的这次 apply 里同步使用; 存起来以后 (或在别的插件的 apply 里) 再用会报错.
+-;  这里的纪律仍然比 Cordis 严: 共享状态只能经 ctx-use 改动, 每个操作都交出逆 (Cordis 允许裸 disposer).
+-;留给下一层的问题: 插件带配置; 换配置要重新加载.
++;本层新增: 每个实例带一份配置. apply 可以写成 (ctx config) (同 Cordis 的 apply(ctx, config)),
++;  也可以只拿 ctx, 用 ctx-config 读. install! 和 ctx-plugin 都可以给配置.
++;  插件可以声明 #:schema 检查配置, 不合法的配置在 install!/update!/replace! 时就被拒绝.
++;  update! 换配置 (Cordis: fiber.update): 在线或加载中的实例卸载, 再按新配置加载;
++;  加载失败的实例清除失败, 按新配置重试 —— 这是修好一个坏配置的方法.
++;  replace! 原地换插件 (Cordis: registry.replace): 实例编号不变, 依赖它的实例照常跟着重载.
++;  都不需要新的卸载机制: 换配置就是"卸载后重新加载", 第3层已有.
++;  不建模的: Cordis 允许监听 internal/update 拦下重启, 让插件就地吸收新配置;
++;  那样旧配置下做的事留在原处, 不经撤销, 不在本模型的保证之内.
++;留给下一层的问题: 子插件读不到父插件提供的服务, 除非也声明依赖; 事件只有登记, 没有分发.
+ (require (only-in racket/control reset-at shift-at))
+ (provide (all-defined-out))
+ 
+@@ -27,7 +25,7 @@
+ ;cont : value -> ir
+ (struct Op (key operation cont))
+ ;安装子插件child, 其生命期不超过当前实例
+-(struct Spawn (child next))
++(struct Spawn (child config next))
+ (struct Done ())
+ (struct Fail (why))
+ 
+@@ -35,15 +33,18 @@
+ 
+ ;apply 外面的提示符; ctx 调用中止到这里
+ (define apply-tag (make-continuation-prompt-tag 'apply))
+-;ctx 记下开始加载时在场的可选依赖; load 是这次加载的标识, ctx 只在这次加载的 apply 里有效
+-(struct ctx (present load))
+-;把 apply 变成程序: 运行到第一次 ctx 调用为止
++;ctx 记下开始加载时在场的可选依赖, 以及实例的配置;
++;load 是这次加载的标识, ctx 只在这次加载的 apply 里有效
++(struct ctx (present config load))
++;把 apply 变成程序: 运行到第一次 ctx 调用为止. apply 可以拿 (ctx) 或 (ctx config)
+ ;抛出的任何值都是加载失败; 只有用户中断 (break) 照常传出去
+ (define (apply->program apply c)
+   (reset-at apply-tag
+     (with-continuation-mark load-key (ctx-load c)
+       (with-handlers ([(λ (e) (not (exn:break? e))) (λ (e) (Fail (raised->why e)))])
+-        (apply c)
++        (if (procedure-arity-includes? apply 2)
++            (apply c (ctx-config c))
++            (apply c))
+         (Done)))))
+ (define (raised->why e)
+   (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
+@@ -61,10 +62,11 @@
+ (define (ctx-provide c key init)
+   (check-in-apply 'ctx-provide c)
+   (shift-at apply-tag k (Provide key init k)))
+-;装上子插件, 其生命期不超过当前实例 (Cordis: ctx.plugin)
+-(define (ctx-plugin c child)
++;装上子插件, 其生命期不超过当前实例 (Cordis: ctx.plugin(child, config))
++(define (ctx-plugin c child [config #f])
+   (check-in-apply 'ctx-plugin c)
+-  (shift-at apply-tag k (Spawn child k)))
++  (check-config 'ctx-plugin child config)
++  (shift-at apply-tag k (Spawn child config k)))
+ ;可选依赖是否在场
+ (define (ctx-has? c key)
+   (and (member key (ctx-present c)) #t))
+@@ -74,18 +76,23 @@
+ 
+ ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
+ ;构造时reacts可以省略, 默认没有事件处理器
+-;optional是可选依赖, 默认没有; apply 是 (ctx -> 任意)
+-(struct plugin (name deps optional provides apply reacts)
++;optional是可选依赖, 默认没有; apply 是 (ctx -> 任意) 或 (ctx 配置 -> 任意);
++;schema 检查配置, 默认什么配置都接受
++(struct plugin (name deps optional provides apply reacts schema)
+   #:constructor-name make-plugin
+   #:omit-define-syntaxes)
+-(define (plugin name deps provides apply [reacts '()] #:optional [optional '()])
+-  (make-plugin name deps optional provides apply reacts))
++(define (plugin name deps provides apply [reacts '()]
++                #:optional [optional '()] #:schema [schema (λ (config) #t)])
++  (make-plugin name deps optional provides apply reacts schema))
++(define (check-config who plug config)
++  (unless ((plugin-schema plug) config)
++    (error who "插件 ~a 的配置不合法: ~a" (plugin-name plug) config)))
+ ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
+ ;remaining 是剩余需要执行的程序;
+ ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
+-;disposed? 表示已被要求移除; parent是父实例的id, 直接install!的实例为#f
++;disposed? 表示已被要求移除; parent是父实例的id, 直接install!的实例为#f; config是配置
+ (struct instance
+-  (plugin phase remaining undo-stack view failure disposed? parent)
++  (plugin phase remaining undo-stack view failure disposed? parent config)
+   #:mutable)
+ (define instance-deps
+   (compose plugin-deps instance-plugin))
+@@ -161,16 +168,23 @@
+ (define (has-children? m id)
+   (for/or ([i (in-hash-values (manager-instances m))])
+     (equal? (instance-parent i) id)))
+-;与plug提供相同服务的现存实例, 没有则为#f
+-(define (provider-conflict m plug)
++;与plug提供相同服务的现存实例 (不算except), 没有则为#f
++(define (provider-conflict m plug #:except [except #f])
+   (for/first ([i (in-hash-values (manager-instances m))]
+-              #:when (for/or ([key (plugin-provides plug)])
+-                       (member key (instance-provides i))))
++              #:when (and (not (eq? i except))
++                          (for/or ([key (plugin-provides plug)])
++                            (member key (instance-claims i)))))
+     i))
+-(define (add-instance! m plug parent)
++;实例占着的服务: 它声明提供的, 加上撤销栈里还没撤回的.
++;replace! 之后两者可以不同: 换下来的插件提供的服务, 要等卸载撤回之后才空出来
++(define (instance-claims i)
++  (append (instance-provides i)
++          (for/list ([entry (instance-undo-stack i)] #:when (undo-provide? entry))
++            (undo-provide-key entry))))
++(define (add-instance! m plug parent [config #f])
+   (define id (fresh-id! m))
+   (hash-set! (manager-instances m) id
+-             (instance plug 'inactive #f '() #f #f #f parent))
++             (instance plug 'inactive #f '() #f #f #f parent config))
+   id)
+ ;检查实例是否能够访问相应服务
+ ;如果可以就返回对应的provision
+@@ -230,14 +244,14 @@
+             (push-undo! (undo-provide key new-id) i)
+             (set-instance-remaining! i (next (void)))
+             (format "提供 ~a (编号 ~a)" key new-id)])]
+-    [(Spawn child next)
++    [(Spawn child config next)
+      (cond [(provider-conflict m child)
+             => (λ (existing)
+                  (fail! (format "子插件 ~a 与 ~a 提供了相同的服务"
+                                 (plugin-name child) (instance-name existing))
+                         i))]
+            [else
+-            (define child-id (add-instance! m child id))
++            (define child-id (add-instance! m child id config))
+             (push-undo! (undo-spawn child-id) i)
+             (set-instance-remaining! i (next (void)))
+             (format "安装子插件 ~a (实例 ~a)" (plugin-name child) child-id)])]))
+@@ -334,7 +348,8 @@
+             (set-instance-phase! i 'loading)
+             ;apply 拿到的 ctx 记下在场集, 由 ctx-has? 选变体
+             (set-instance-remaining!
+-             i (apply->program (plugin-apply (instance-plugin i)) (ctx present (gensym 'load))))
++             i (apply->program (plugin-apply (instance-plugin i))
++                               (ctx present (instance-config i) (gensym 'load))))
+             (set-instance-undo-stack! i '())
+             (set-instance-view! i wanted)
+             (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
+@@ -425,14 +440,15 @@
+   (or (instance-ref m id)
+       (error who "没有编号为 ~a 的实例" id)))
+ ;装上插件: 先停在 inactive, 依赖都可用时由 settle! 加载. 返回实例id
+-(define (install! m plug #:trace [trace void])
++(define (install! m plug #:config [config #f] #:trace [trace void])
+   (cond [(provider-conflict m plug)
+          => (λ (existing)
+               (error 'install! "~a 与 ~a 提供了相同的服务"
+                      (plugin-name plug) (instance-name existing)))])
+   (unless (null? (set-intersect (plugin-optional plug) (plugin-provides plug)))
+     (error 'install! "~a 可选依赖自己提供的服务" (plugin-name plug)))
+-  (define id (add-instance! m plug #f))
++  (check-config 'install! plug config)
++  (define id (add-instance! m plug #f config))
+   (trace id (format "装上实例 ~a (插件 ~a), 依赖 ~a" id (plugin-name plug) (plugin-deps plug)))
+   id)
+ ;移除实例: 标记为已弃置; 它的使用者先卸载, 它再卸载, 最后从管理器中删除
+@@ -455,6 +471,36 @@
+     (error 'reset! "实例 ~a 不是加载失败后的inactive实例" id))
+   (set-instance-failure! i #f)
+   (trace id (format "重试实例 ~a" id)))
++;换配置 (Cordis: fiber.update): 在线或加载中的实例卸载后按新配置加载; 失败的实例清除失败, 重试
++(define (update! m id config #:trace [trace void])
++  (define i (existing-instance 'update! m id))
++  (when (instance-disposed? i)
++    (error 'update! "实例 ~a 已弃置" id))
++  (check-config 'update! (instance-plugin i) config)
++  (set-instance-config! i config)
++  (set-instance-failure! i #f)
++  (when (memq (instance-phase i) '(loading active))
++    (set-instance-phase! i 'unloading))
++  (trace id (format "实例 ~a (插件 ~a) 换配置为 ~a" id (instance-name i) config)))
++;原地换插件 (Cordis: registry.replace): 实例编号不变; 清除失败, 按新插件重新加载
++(define (replace! m id plug #:config [config #f] #:trace [trace void])
++  (define i (existing-instance 'replace! m id))
++  (when (instance-disposed? i)
++    (error 'replace! "实例 ~a 已弃置" id))
++  (cond [(provider-conflict m plug #:except i)
++         => (λ (existing)
++              (error 'replace! "~a 与 ~a 提供了相同的服务"
++                     (plugin-name plug) (instance-name existing)))])
++  (unless (null? (set-intersect (plugin-optional plug) (plugin-provides plug)))
++    (error 'replace! "~a 可选依赖自己提供的服务" (plugin-name plug)))
++  (check-config 'replace! plug config)
++  (define old-name (instance-name i))
++  (set-instance-plugin! i plug)
++  (set-instance-config! i config)
++  (set-instance-failure! i #f)
++  (when (memq (instance-phase i) '(loading active))
++    (set-instance-phase! i 'unloading))
++  (trace id (format "实例 ~a 的插件从 ~a 换成 ~a" id old-name (plugin-name plug))))
+ ;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
+ ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
+ ;第index个处理器是一族时, 装上它在载荷payload处的插件
+@@ -476,6 +522,7 @@
+           [(void? payload)
+            (error 'react! "实例 ~a 的第 ~a 个事件处理器是一族, 需要载荷" id index)]
+           [else (handler payload)]))
++  (check-config 'react! child #f)
+   (cond [(provider-conflict m child)
+          => (λ (existing)
+               (error 'react! "~a 与 ~a 提供了相同的服务"
+@@ -618,6 +665,13 @@
+           (λ (ctx) (void))
+           (list restrict)))
+ 
++;alias 按配置登记一个别名; 配置是 (名字 . 指向), 名字必须是字符串
++(define alias
++  (plugin "alias" '(tools) '()
++          (λ (ctx config)
++            (ctx-use ctx 'tools (register (car config) (cdr config))))
++          #:schema (λ (config) (and (pair? config) (string? (car config))))))
++
+ ;服务的内容, 按名字排序; 没有这个服务时为#f
+ (define (state-of m key)
+   (define p (provision-ref m key))
+@@ -690,26 +744,40 @@
+   (scene "agent3 结束: 它被守卫挡着, 限制先撤销, agent3 才拆除; agent4 的限制不受影响"
+          (λ () (dispose 'agent3)))
+   (scene "guard 结束: agent4 上的限制随它撤销, agent4 照常运行"
+-         (λ () (dispose 'guard))))
++         (λ () (dispose 'guard)))
++  (scene "装 alias, 配置为 ll -> ls -l"
++         (λ () (hash-set! ids 'alias (install! m alias #:config '("ll" . "ls -l") #:trace print-step))))
++  (scene "update! alias 为 la -> ls -a: 卸载后按新配置重新加载, 实例编号不变"
++         (λ () (update! m (hash-ref ids 'alias) '("la" . "ls -a") #:trace print-step)))
++  (scene "update! alias 为 ls -> ls --color: 与 shell 撞名, 加载失败"
++         (λ () (update! m (hash-ref ids 'alias) '("ls" . "ls --color") #:trace print-step)))
++  (scene "update! alias 回 ll -> ls -l: 失败清除, 按新配置重试"
++         (λ () (update! m (hash-ref ids 'alias) '("ll" . "ls -l") #:trace print-step)))
++  (scene "replace! 把 git2 的实例原地换回 git: 编号不变"
++         (λ () (replace! m (hash-ref ids 'git2) git #:trace print-step))))
+ 
+ (module+ test
+   (require rackunit
+            (rename-in (submod "..")
+                       [install! install!/raw] [dispose! dispose!/raw] [restart! restart!/raw]
+-                      [reset! reset!/raw] [react! react!/raw]))
++                      [reset! reset!/raw] [react! react!/raw]
++                      [update! update!/raw] [replace! replace!/raw]))
+ 
+   ;; 下面沿用第5层的测试: 每个编排操作之后立即 settle! (#:trace 也传给 settle!).
+   ;; 穿插的情形在后面用 /raw 的版本和 step! 单独测
+   (define (settling f)
+     (make-keyword-procedure
+      (λ (kws vals m . args)
++       (define trace (for/first ([k kws] [v vals] #:when (eq? k '#:trace)) v))
+        (begin0 (keyword-apply f kws vals m args)
+-               (keyword-apply settle! kws vals (list m))))))
++               (settle! m #:trace (or trace void))))))
+   (define install! (settling install!/raw))
+   (define dispose! (settling dispose!/raw))
+   (define restart! (settling restart!/raw))
+   (define reset! (settling reset!/raw))
+   (define react! (settling react!/raw))
++  (define update! (settling update!/raw))
++  (define replace! (settling replace!/raw))
+ 
+   ;; 依赖没有时等待, 有了随即加载; 安装次序随意
+   (define m (make-manager))
+@@ -1165,6 +1233,91 @@
+     (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
+     (check-true (settled? m)))
+ 
++  ;;; 配置
++
++  ;; apply 拿到配置; update! 换配置后按新配置重新加载, 实例编号不变
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (define a (install! m alias #:config '("ll" . "ls -l")))
++    (check-equal? (state-of m 'tools) '(("ll" . "ls -l")))
++    (update! m a '("la" . "ls -a"))
++    (check-equal? (state-of m 'tools) '(("la" . "ls -a")))
++    (check-eq? (instance-phase (instance-ref m a)) 'active)
++    (check-equal? (instance-config (instance-ref m a)) '("la" . "ls -a"))
++    ;; 不合法的配置当场被拒绝, 实例不受影响
++    (check-exn #rx"配置不合法" (λ () (update! m a 'oops)))
++    (check-exn #rx"配置不合法" (λ () (install! m alias #:config #f)))
++    (check-equal? (state-of m 'tools) '(("la" . "ls -a")))
++    ;; 坏配置导致加载失败; 再 update! 一个好配置就修好了
++    (void (install! m shell))
++    (update! m a '("ls" . "ls --color"))
++    (check-true (string? (instance-failure (instance-ref m a))))
++    (check-equal? (tools-of m) '("cat" "ls"))
++    (update! m a '("ll" . "ls -l"))
++    (check-false (instance-failure (instance-ref m a)))
++    (check-equal? (tools-of m) '("cat" "ll" "ls"))
++    (check-true (settled? m)))
++
++  ;; 等待中的实例换配置: 依赖来了按新配置加载
++  (let ([m (make-manager)])
++    (define a (install! m alias #:config '("ll" . "ls -l")))
++    (update! m a '("la" . "ls -a"))
++    (void (install! m core))
++    (check-equal? (state-of m 'tools) '(("la" . "ls -a"))))
++
++  ;; apply 也可以只拿 ctx, 用 ctx-config 读; 子插件的配置由 ctx-plugin 给
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (void (install! m (plugin "aliases" '(tools) '()
++                              (λ (ctx)
++                                (for ([c (ctx-config ctx)])
++                                  (ctx-plugin ctx alias c))))
++                    #:config '(("ll" . "ls -l") ("la" . "ls -a"))))
++    (check-equal? (tools-of m) '("la" "ll")))
++
++  ;; replace!: 编号不变, 换成新插件; 依赖它的实例跟着重载
++  (let ([m (make-manager)])
++    (define c (install! m core))
++    (define s (install! m shell))
++    (define old-pid (provision-id (provision-ref m 'tools)))
++    (replace! m c core+)
++    (check-equal? (instance-name (instance-ref m c)) "core+")
++    (check-equal? (tools-of m) '("builtin" "cat" "ls"))
++    (check-not-equal? (provision-id (provision-ref m 'tools)) old-pid)
++    (check-eq? (instance-phase (instance-ref m s)) 'active)
++    ;; 换成与别的实例冲突的插件: 被拒绝
++    (define b (install! m bus))
++    (check-exn #rx"相同的服务" (λ () (replace! m b core)))
++    ;; 失败的实例 replace! 之后清除失败
++    (define bad-id (install! m bad))
++    (check-true (string? (instance-failure (instance-ref m bad-id))))
++    (replace! m bad-id git)
++    (check-false (instance-failure (instance-ref m bad-id)))
++    (check-equal? (tools-of m) '("builtin" "cat" "git" "ls"))
++    (check-true (settled? m)))
++  ;; replace! 之后, 换下来的插件提供的服务还没撤回时, 别的插件不能来提供它
++  (for ([seed (in-range 20)])
++    (define m (make-manager))
++    (define c (install!/raw m core))
++    (void (settle! m))
++    (replace!/raw m c bus)
++    (check-exn #rx"相同的服务" (λ () (install!/raw m core)) (format "种子 ~a" seed))
++    (void (settle! m #:order (random-order seed)))
++    (define c2 (install!/raw m core))                ; 撤回之后就可以了
++    (void (settle! m #:order (random-order seed)))
++    (check-false (instance-failure (instance-ref m c2)) (format "种子 ~a" seed)))
++  ;; replace! 同样不接受可选依赖自己提供的服务的插件
++  (let ([m (make-manager)])
++    (define c (install! m core))
++    (check-exn #rx"可选依赖自己提供的服务"
++               (λ () (replace! m c (plugin "self" '() '(llm) (λ (ctx) (void)) #:optional '(llm))))))
++  ;; react! 也检查处理器的配置 (反应的配置是 #f)
++  (let ([m (make-manager)])
++    (void (install! m bus))
++    (define strict-ping (plugin "strict-ping" '(events) '() (λ (ctx) (void)) #:schema string?))
++    (define w (install! m (plugin "w" '(events) '() (λ (ctx) (void)) (list strict-ping))))
++    (check-exn #rx"配置不合法" (λ () (react! m w 0))))
++
+   ;;; 以下是第6层新增的测试: 编排与生命周期步穿插
+ 
+   ;; 中途改道: cat-tool 加载到一半时 core 重启, tools 不再可见, cat-tool 放弃加载,

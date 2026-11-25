@@ -1,0 +1,152 @@
+--- M4.rkt	2026-11-25 03:28:48.808967500 +0800
++++ M5.rkt	2026-11-25 03:28:48.810072700 +0800
+@@ -1,11 +1,12 @@
+ #lang racket
+-;渐进的插件管理器, 第4层: 子插件.
++;渐进的插件管理器, 第5层: 运行时反应.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 程序多了 spawn: 插件在加载中装上一个子插件, 子实例记下父实例 (parent),
+-;  父实例的撤销栈记下一项 undo-spawn. 子实例的生命期不超过父实例:
+-;  父实例卸载撤到 undo-spawn 时, 先请子实例退出, 等它被移除了再往下撤; 有子实例的实例不能被移除.
+-;  所以卸载不再总是一整段: 它可能停在一个还在的子实例前面, 等 settle! 先把子实例处理完.
+-;留给下一层的问题: 子插件只能在加载时装. 插件上线之后, 每响应一个事件做的事 (运行时效应) 由谁来撤?
++;本层新增: 插件多了 reacts, 一列事件处理器, 每个处理器也是一个插件. 实例 active 时,
++;  react! 把第 index 个处理器作为它的子实例装上, 并在它的撤销栈上记下 undo-spawn.
++;  所以一次反应就是一个子实例: 不需要新的卸载机制, 第4层的做法照管它.
++;  单独撤销一次反应就是 dispose! 这个子实例; 父实例卸载时, 还在的反应先退出.
++;  反应不会重放: 父实例重新加载之后, 之前的反应都已撤掉, 要等新的事件.
++;留给下一层的问题: 真实插件的加载是异步的: 加载到一半时, 依赖可能已经变了.
+ (provide (all-defined-out))
+ 
+ ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
+@@ -33,7 +34,13 @@
+     [(_ (key operation) rest ...)
+      (Op key operation (λ (ignored) (prog rest ...)))]))
+ 
+-(struct plugin (name deps provides body))
++;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
++;构造时reacts可以省略, 默认没有事件处理器
++(struct plugin (name deps provides body reacts)
++  #:constructor-name make-plugin
++  #:omit-define-syntaxes)
++(define (plugin name deps provides body [reacts '()])
++  (make-plugin name deps provides body reacts))
+ ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
+ ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
+ ;disposed? 表示已被要求移除; parent是父实例的id, 直接install!的实例为#f
+@@ -387,6 +394,27 @@
+   (set-instance-failure! i #f)
+   (trace id (format "重试实例 ~a" id))
+   (settle! m #:trace trace))
++;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
++;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
++(define (react! m id index #:trace [trace void])
++  (define i (existing-instance 'react! m id))
++  (define reactions (plugin-reacts (instance-plugin i)))
++  (unless (and (eq? (instance-phase i) 'active)
++               (not (instance-disposed? i)))
++    (error 'react! "实例 ~a 不是未弃置的active实例" id))
++  (unless (and (exact-nonnegative-integer? index)
++               (< index (length reactions)))
++    (error 'react! "实例 ~a 没有第 ~a 个事件处理器" id index))
++  (define child (list-ref reactions index))
++  (cond [(provider-conflict m child)
++         => (λ (existing)
++              (error 'react! "~a 与 ~a 提供了相同的服务"
++                     (plugin-name child) (instance-name existing)))])
++  (define child-id (add-instance! m child id))
++  (push-undo! (undo-spawn child-id) i)
++  (trace id (format "实例 ~a 作出反应: 子实例 ~a (插件 ~a)" id child-id (plugin-name child)))
++  (settle! m #:trace trace)
++  child-id)
+ 
+ ;事件 event 发生时依次调用的处理器
+ (define (handlers-for m event)
+@@ -473,6 +501,12 @@
+   (plugin "ping" '(events) '()
+           (prog ('events (on "tick" "ping"))
+                 (Done))))
++;watcher 自己登记一个处理器; 每次反应装上一个 ping, 登记一个相同的处理器
++(define watcher
++  (plugin "watcher" '(events) '()
++          (prog ('events (on "start" "watcher"))
++                (Done))
++          (list ping)))
+ 
+ (define (tools-of m)
+   (define p (provision-ref m 'tools))
+@@ -503,6 +537,16 @@
+          (λ () (restart! m (hash-ref ids 'core) #:trace print-step)))
+   (scene "移除 toolkit: 按 LIFO 拆除, 先请 sed-tool 退出, 再撤 help, 再请 grep-tool 退出"
+          (λ () (dispose 'toolkit)))
++  (scene "装 bus 和 watcher"
++         (λ () (install 'bus bus)
++               (install 'watcher watcher)))
++  (scene "watcher 反应两次: 两个 ping 子实例各登记一个相同的处理器"
++         (λ () (hash-set! ids 'ping (react! m (hash-ref ids 'watcher) 0 #:trace print-step))
++               (react! m (hash-ref ids 'watcher) 0 #:trace print-step)))
++  (scene "单独撤销第一次反应: 只删掉它用自己令牌登记的那一项"
++         (λ () (dispose 'ping)))
++  (scene "移除 watcher: 剩下的反应先退出"
++         (λ () (dispose 'watcher)))
+   (scene "装 bad: 加载失败, 停下"
+          (λ () (install 'bad bad)))
+   (scene "reset! bad: 重试, 再次失败"
+@@ -631,7 +675,9 @@
+     (dispose! m grep-id)
+     (check-equal? (tools-of m) '("help" "sed"))
+     (check-eq? (instance-phase (instance-ref m t)) 'active)
+-    (dispose! m t)
++    (define log '())
++    (dispose! m t #:trace (λ (id message) (set! log (cons message log))))
++    (check-not-false (member (format "子实例 ~a 已被移除, 弹出它的spawn项" grep-id) log))
+     (check-equal? (tools-of m) '()))
+ 
+   ;; 子插件与现存实例提供相同的服务: 父实例加载失败
+@@ -640,6 +686,46 @@
+     (define p (install! m (plugin "bundle" '() '() (prog (spawn core) (Done)))))
+     (check-equal? (instance-failure (instance-ref m p)) "子插件 core 与 core 提供了相同的服务"))
+ 
++  ;; react: 相同的处理器登记两次, 令牌让撤销只删自己那一项
++  (let ([m (make-manager)])
++    (void (install! m bus))
++    (define w (install! m watcher))
++    (check-exn exn:fail? (λ () (react! m w 1)))
++    (define ping1 (react! m w 0))
++    (define ping2 (react! m w 0))
++    (check-equal? (handlers-for m "tick") '("ping" "ping"))
++    (check-equal? (instance-parent (instance-ref m ping1)) w)
++    ;; 各次登记的令牌: watcher 自己的一项, 以及第二次反应的一项
++    (define (tok-of id) (undo-op-tok (last (instance-undo-stack (instance-ref m id)))))
++    (define keep (sort (list (tok-of w) (tok-of ping2)) <))
++    (dispose! m ping1)
++    (check-equal? (handlers-for m "tick") '("ping"))
++    (check-equal? (sort (hash-keys (provision-state (provision-ref m 'events))) <) keep)
++    (check-false (instance-ref m ping1))
++    (check-true (and (instance-ref m ping2) #t))
++    (check-eq? (instance-phase (instance-ref m w)) 'active)
++    ;; 父实例卸载时, 还在的反应先退出
++    (dispose! m w)
++    (check-equal? (handlers-for m "tick") '())
++    (check-equal? (handlers-for m "start") '())
++    (check-false (instance-ref m ping2))
++    (check-true (settled? m)))
++
++  ;; 反应不会重放: 重启 bus 之后 watcher 重新加载, 之前的反应都已撤掉
++  (let ([m (make-manager)])
++    (define b (install! m bus))
++    (define w (install! m watcher))
++    (void (react! m w 0))
++    (restart! m b)
++    (check-eq? (instance-phase (instance-ref m w)) 'active)
++    (check-equal? (handlers-for m "start") '("watcher"))
++    (check-equal? (handlers-for m "tick") '())
++    (check-equal? (hash-count (manager-instances m)) 2)
++    ;; react! 要求未弃置的active实例
++    (check-exn exn:fail? (λ () (react! m b 0)))
++    (dispose! m b)
++    (check-exn exn:fail? (λ () (react! m w 0))))
++
+   ;; 令牌: 同一个处理器登记两次, 移除第一个, 留下的是第二个的那一项
+   (let ([m (make-manager)])
+     (define p1 (install! m ping))

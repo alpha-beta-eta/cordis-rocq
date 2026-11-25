@@ -1,0 +1,207 @@
+--- M7.rkt	2026-11-25 03:28:48.810636100 +0800
++++ M8.rkt	2026-11-25 03:28:48.810636100 +0800
+@@ -1,20 +1,19 @@
+ #lang racket
+-;渐进的插件管理器, 第7层: 可选依赖.
++;渐进的插件管理器, 第8层: 交集生命期.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 插件可以声明可选依赖 (#:optional): 有就用, 没有不等.
+-;  开始加载时可用的可选依赖 (在场集) 和必需依赖一起进入视图, 程序可以在它们上面操作;
+-;  body 也可以是 (在场集 -> 程序), 按在场集选变体.
+-;  在场集一变 (可选依赖出现或消失), 视图就过期, 已有的规则让实例重载. 出现时也重载:
+-;  否则在场集取决于提供者恰好何时上线, 结果与调度有关.
+-;取舍与义务: "在场集一变就重载" 是为合流付的代价. 它要求插件守两条义务 (docs/EXTENSIONS.md 1.2 节):
+-;  (1) 不可选依赖自己提供的服务; (2) 沿必需与可选依赖的边都不成环 (秩严格递增). (1) 是 (2) 的特例.
+-;  违反时不是死锁, 而是活锁: 实例互相触发重载, settle! 永不停止. 测试中有两个反例:
+-;  经 spawn 装上的子插件可选依赖自己提供的服务; 经可选依赖成环.
+-;  运行时不检查这两条, 与必需依赖成环时一样 (那时插件永远等待, 静止; Cordis 也不检查).
+-;  install! 拦下的只是最简单的一种 (直接装上的插件可选依赖自己提供的服务), 不是保证.
+-;  Cordis 没有这个机制, 插件只好用 ctx.get 偷看服务在不在 (见 docs/EXTENSIONS.md 第1节).
+-;  对应 programs/cordis3.rkt 的扩展1.
+-;留给下一层的问题: 有些效应既属于插件, 也属于某个 agent, 任一方结束都该撤掉.
++;本层新增: 事件处理器可以是一族 (载荷 -> 插件), react! 带上载荷 (如 agent 的编号),
++;  装上这一族在该载荷处的插件. 这解决的是: 插件 P 给 agent A 挂一个效应 (如限制 A 能用的工具),
++;  P 和 A 任一方结束时都要撤掉它. 编码不需要新的卸载机制:
++;  - agent A 提供一个以自己编号为名的服务 (它的上下文);
++;  - 效应是 P 的一次反应, 也就是 P 的子实例, 它依赖 A 的上下文, 并在其中登记;
++;  - P 结束: 子实例先退出 (第4层); A 结束: 子实例的依赖不可用了, 它卸载,
++;    而 A 被守卫挡着, 在效应撤掉之前一项也不撤 (第3层).
++;  A 结束后效应的实例停在 inactive, 直到 P 卸载才被移除.
++;取舍与义务: 效应不随 A 结束而移除, 换来的是不需要新的规则. 代价是一条编排者义务: agent 编号不复用.
++;  复用时, 停在 inactive 的旧效应会在新 agent 的上下文里重新加载 (测试中有反例). dsh 的 agent 编号不复用;
++;  需要"一次性"语义时, P 可以在"agent 结束"事件的处理器里 dispose! 这个子实例.
++;  对应 programs/cordis3.rkt 的扩展3 (见 docs/EXTENSIONS.md 第3节).
++;留给下一层的问题: 到这里插件还是一段程序 (数据), 而 Cordis 的插件是拿到 ctx 的一段代码.
+ (provide (all-defined-out))
+ 
+ ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
+@@ -135,7 +134,7 @@
+ (define (provider-conflict m plug)
+   (for/first ([i (in-hash-values (manager-instances m))]
+               #:when (for/or ([key (plugin-provides plug)])
+-                       (memq key (instance-provides i))))
++                       (member key (instance-provides i))))
+     i))
+ (define (add-instance! m plug parent)
+   (define id (fresh-id! m))
+@@ -184,7 +183,7 @@
+                    key pid tok value)]
+           [#f (fail! (format "~a (编号 ~a) 上的操作被拒绝" key pid) i)])])]
+     [(Provide key init next)
+-     (cond [(not (memq key (instance-provides i)))
++     (cond [(not (member key (instance-provides i)))
+             (fail! (format "~a 不在声明的 provides ~a 中"
+                            key (instance-provides i))
+                    i)]
+@@ -428,7 +427,8 @@
+   (trace id (format "重试实例 ~a" id)))
+ ;实例对一个事件作出反应, 反应是reacts中第index个插件的子实例
+ ;返回子实例的id; 提前撤销这次反应就是dispose!这个子实例
+-(define (react! m id index #:trace [trace void])
++;第index个处理器是一族时, 装上它在载荷payload处的插件
++(define (react! m id index [payload (void)] #:trace [trace void])
+   (define i (existing-instance 'react! m id))
+   (define reactions (plugin-reacts (instance-plugin i)))
+   (unless (and (eq? (instance-phase i) 'active)
+@@ -437,7 +437,15 @@
+   (unless (and (exact-nonnegative-integer? index)
+                (< index (length reactions)))
+     (error 'react! "实例 ~a 没有第 ~a 个事件处理器" id index))
+-  (define child (list-ref reactions index))
++  (define handler (list-ref reactions index))
++  (define child
++    (cond [(plugin? handler)
++           (unless (void? payload)
++             (error 'react! "实例 ~a 的第 ~a 个事件处理器不是一族, 不接受载荷" id index))
++           handler]
++          [(void? payload)
++           (error 'react! "实例 ~a 的第 ~a 个事件处理器是一族, 需要载荷" id index)]
++          [else (handler payload)]))
+   (cond [(provider-conflict m child)
+          => (λ (existing)
+               (error 'react! "~a 与 ~a 提供了相同的服务"
+@@ -471,7 +479,7 @@
+   (newline)
+   (printf "  -- 服务:")
+   (when (zero? (hash-count (manager-provisions m))) (printf " (无)"))
+-  (for ([key '(tools events llm skills)] #:when (provision-ref m key))
++  (for ([key (sort (hash-keys (manager-provisions m)) string<? #:key ~a)])
+     (define p (provision-ref m key))
+     (printf " ~a[编号~a, 由#~a提供]=~a" key (provision-id p) (provision-owner p)
+             (case key
+@@ -566,6 +574,22 @@
+                       (Done))))
+           #:optional '(llm)))
+ 
++;agent n 的上下文是服务 (agent n); restrict n 是挂在它上面的效应,
++;依赖 (agent n) 并在其中登记一项; guard 的事件处理器是 restrict 这一族
++(define (agent-key n) (list 'agent n))
++(define (agent n)
++  (plugin (format "agent~a" n) '() (list (agent-key n))
++          (prog (serve (agent-key n) (hash))
++                (Done))))
++(define (restrict n)
++  (plugin (format "restrict~a" n) (list (agent-key n)) '()
++          (prog ((agent-key n) (register "restricted" #t))
++                (Done))))
++(define guard
++  (plugin "guard" '() '()
++          (prog (Done))
++          (list restrict)))
++
+ ;服务的内容, 按名字排序; 没有这个服务时为#f
+ (define (state-of m key)
+   (define p (provision-ref m key))
+@@ -627,7 +651,18 @@
+   (scene "装 llm: assistant 的在场集变了, 重载, 换成用 llm 的变体"
+          (λ () (install 'llm llm-provider)))
+   (scene "移除 llm: assistant 先卸载 (llm 被守卫挡着), 撤掉它在 llm 上登记的一项, 再按退化的变体加载"
+-         (λ () (dispose 'llm))))
++         (λ () (dispose 'llm)))
++  (scene "装 agent3, agent4 与 guard"
++         (λ () (install 'agent3 (agent 3))
++               (install 'agent4 (agent 4))
++               (install 'guard guard)))
++  (scene "guard 对两个 agent 的事件各反应一次, 以载荷 3 和 4 装上 restrict 一族, 在各自的上下文里挂一项限制"
++         (λ () (react! m (hash-ref ids 'guard) 0 3 #:trace print-step)
++               (react! m (hash-ref ids 'guard) 0 4 #:trace print-step)))
++  (scene "agent3 结束: 它被守卫挡着, 限制先撤销, agent3 才拆除; agent4 的限制不受影响"
++         (λ () (dispose 'agent3)))
++  (scene "guard 结束: agent4 上的限制随它撤销, agent4 照常运行"
++         (λ () (dispose 'guard))))
+ 
+ (module+ test
+   (require rackunit
+@@ -944,6 +979,72 @@
+     (check-true (quiet-within? m 10))
+     (check-true (settled? m)))
+ 
++  ;;; 交集生命期
++
++  (define (agent-setup)
++    (define m (make-manager))
++    (define a (install! m (agent 3)))
++    (define g (install! m guard))
++    (define r (react! m g 0 3))
++    (values m a g r))
++  ;; 一族处理器要载荷; 效应在 agent 的上下文里登记
++  (let-values ([(m a g r) (agent-setup)])
++    (check-exn #rx"需要载荷" (λ () (react! m g 0)))
++    (check-equal? (state-of m (agent-key 3)) '(("restricted" . #t)))
++    (check-eq? (instance-phase (instance-ref m r)) 'active)
++    (check-equal? (instance-parent (instance-ref m r)) g))
++  ;; agent 结束: 限制先撤销, agent 才撤回自己的上下文
++  (let-values ([(m a g r) (agent-setup)])
++    (dispose!/raw m a)
++    (check-not-false (step! m a))                    ; agent 开始卸载
++    (check-false (step! m a))                        ; 被守卫挡住: 限制还解析着它
++    (check-equal? (state-of m (agent-key 3)) '(("restricted" . #t)))
++    (check-not-false (step! m r))                    ; 限制的依赖没了, 开始卸载
++    (check-not-false (step! m r))                    ; 撤销登记
++    (check-equal? (state-of m (agent-key 3)) '())
++    (check-not-false (step! m r))                    ; 限制 -> inactive
++    (void (settle! m))
++    (check-true (settled? m))
++    (check-false (instance-ref m a))
++    (check-false (state-of m (agent-key 3)))
++    ;; 限制的实例停在 inactive, 直到 guard 卸载才被移除
++    (check-eq? (instance-phase (instance-ref m r)) 'inactive)
++    (check-eq? (instance-phase (instance-ref m g)) 'active)
++    (dispose! m g)
++    (check-false (instance-ref m r)))
++  ;; 插件结束: 限制随插件撤销, agent 照常运行, 上下文完整
++  (let-values ([(m a g r) (agent-setup)])
++    (dispose! m g)
++    (check-true (settled? m))
++    (check-false (instance-ref m g))
++    (check-false (instance-ref m r))
++    (check-eq? (instance-phase (instance-ref m a)) 'active)
++    (check-equal? (state-of m (agent-key 3)) '()))
++  ;; 编排者义务的反例: 复用 agent 编号时, 停在 inactive 的旧限制在新的上下文里重新加载
++  (let-values ([(m a g r) (agent-setup)])
++    (dispose! m a)
++    (check-eq? (instance-phase (instance-ref m r)) 'inactive)
++    (void (install! m (agent 3)))
++    (check-eq? (instance-phase (instance-ref m r)) 'active)
++    (check-equal? (state-of m (agent-key 3)) '(("restricted" . #t))))
++  ;; 普通的处理器不接受载荷
++  (let ([m (make-manager)])
++    (void (install! m bus))
++    (define w (install! m watcher))
++    (check-exn #rx"不接受载荷" (λ () (react! m w 0 5))))
++  ;; 两个 agent: 一个结束只撤掉它自己的限制
++  (let ([m (make-manager)])
++    (define a3 (install! m (agent 3)))
++    (define a4 (install! m (agent 4)))
++    (define g (install! m guard))
++    (define r3 (react! m g 0 3))
++    (define r4 (react! m g 0 4))
++    (dispose! m a3)
++    (check-equal? (state-of m (agent-key 4)) '(("restricted" . #t)))
++    (check-eq? (instance-phase (instance-ref m r4)) 'active)
++    (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
++    (check-true (settled? m)))
++
+   ;;; 以下是第6层新增的测试: 编排与生命周期步穿插
+ 
+   ;; 中途改道: cat-tool 加载到一半时 core 重启, tools 不再可见, cat-tool 放弃加载,

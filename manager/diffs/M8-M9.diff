@@ -1,0 +1,478 @@
+--- M8.rkt	2026-11-25 03:28:48.810636100 +0800
++++ M9.rkt	2026-11-25 03:28:48.810636100 +0800
+@@ -1,19 +1,19 @@
+ #lang racket
+-;渐进的插件管理器, 第8层: 交集生命期.
++;渐进的插件管理器, 第9层: ctx 与 apply.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 事件处理器可以是一族 (载荷 -> 插件), react! 带上载荷 (如 agent 的编号),
+-;  装上这一族在该载荷处的插件. 这解决的是: 插件 P 给 agent A 挂一个效应 (如限制 A 能用的工具),
+-;  P 和 A 任一方结束时都要撤掉它. 编码不需要新的卸载机制:
+-;  - agent A 提供一个以自己编号为名的服务 (它的上下文);
+-;  - 效应是 P 的一次反应, 也就是 P 的子实例, 它依赖 A 的上下文, 并在其中登记;
+-;  - P 结束: 子实例先退出 (第4层); A 结束: 子实例的依赖不可用了, 它卸载,
+-;    而 A 被守卫挡着, 在效应撤掉之前一项也不撤 (第3层).
+-;  A 结束后效应的实例停在 inactive, 直到 P 卸载才被移除.
+-;取舍与义务: 效应不随 A 结束而移除, 换来的是不需要新的规则. 代价是一条编排者义务: agent 编号不复用.
+-;  复用时, 停在 inactive 的旧效应会在新 agent 的上下文里重新加载 (测试中有反例). dsh 的 agent 编号不复用;
+-;  需要"一次性"语义时, P 可以在"agent 结束"事件的处理器里 dispose! 这个子实例.
+-;  对应 programs/cordis3.rkt 的扩展3 (见 docs/EXTENSIONS.md 第3节).
+-;留给下一层的问题: 到这里插件还是一段程序 (数据), 而 Cordis 的插件是拿到 ctx 的一段代码.
++;本层新增: 插件不再写成程序 (数据), 而是像 Cordis 那样写成 apply: 拿到 ctx 的一段普通代码.
++;  ctx 上的调用: ctx-use (在服务上操作, 返回结果), ctx-provide, ctx-plugin, ctx-on, ctx-has?.
++;  apply 正常返回就是加载完毕; 抛出异常就是加载失败, 已做的同样撤掉.
++;  管理器的其余部分几乎不变: 运行时用定界续延 (shift/reset) 把 apply 变回前几层的程序 ——
++;  每次 ctx 调用中止到 apply 外面, 交出一条指令和"从这里继续"的续延. 所以 ctx 调用就是 await 点:
++;  一次 ctx 调用之后的代码, 在执行这条指令的那一步里、指令执行之后才运行 (直到下一次调用);
++;  别的插件和编排操作只能插在调用之间. (为此 Provide 和 Spawn 的 next 改成了续延.)
++;  apply 抛出的任何值都是加载失败. 被服务拒绝的操作不在 apply 里抛出, 而是直接让加载失败,
++;  所以 apply 自己的 with-handlers 拦不住它 (这一点与 Cordis 不同). parameterize 只对 apply 的代码有效.
++;  ctx 只能在它所属实例的这次 apply 里同步使用; 存起来以后 (或在别的插件的 apply 里) 再用会报错.
++;  这里的纪律仍然比 Cordis 严: 共享状态只能经 ctx-use 改动, 每个操作都交出逆 (Cordis 允许裸 disposer).
++;留给下一层的问题: 插件带配置; 换配置要重新加载.
++(require (only-in racket/control reset-at shift-at))
+ (provide (all-defined-out))
+ 
+ ;operation : 令牌 状态 -> op-result 或 #f (#f 表示操作被拒绝)
+@@ -21,7 +21,8 @@
+ ;undo : 状态 -> 状态, 撤销这次操作; 它作用在撤销时的状态上
+ (struct op-result (state undo value))
+ 
+-;program ir
++;program ir: 运行时内部的表示, 插件作者不再直接写它
++;next : void -> ir 是续延: 指令执行之后才运行 apply 里后面的代码
+ (struct Provide (key init next))
+ ;cont : value -> ir
+ (struct Op (key operation cont))
+@@ -29,26 +30,56 @@
+ (struct Spawn (child next))
+ (struct Done ())
+ (struct Fail (why))
+-(define-syntax prog
+-  (syntax-rules (serve spawn <-)
+-    [(_ last) last]
+-    [(_ (serve key init) rest ...)
+-     (Provide key init (prog rest ...))]
+-    [(_ (spawn child) rest ...)
+-     (Spawn child (prog rest ...))]
+-    [(_ (var <- key operation) rest ...)
+-     (Op key operation (λ (var) (prog rest ...)))]
+-    [(_ (key operation) rest ...)
+-     (Op key operation (λ (ignored) (prog rest ...)))]))
++
++;;; ctx 与 apply
++
++;apply 外面的提示符; ctx 调用中止到这里
++(define apply-tag (make-continuation-prompt-tag 'apply))
++;ctx 记下开始加载时在场的可选依赖; load 是这次加载的标识, ctx 只在这次加载的 apply 里有效
++(struct ctx (present load))
++;把 apply 变成程序: 运行到第一次 ctx 调用为止
++;抛出的任何值都是加载失败; 只有用户中断 (break) 照常传出去
++(define (apply->program apply c)
++  (reset-at apply-tag
++    (with-continuation-mark load-key (ctx-load c)
++      (with-handlers ([(λ (e) (not (exn:break? e))) (λ (e) (Fail (raised->why e)))])
++        (apply c)
++        (Done)))))
++(define (raised->why e)
++  (format "apply 抛出异常: ~a" (if (exn? e) (exn-message e) e)))
++;当前正在运行的是哪次加载的 apply
++(define load-key (make-continuation-mark-key 'load))
++(define (check-in-apply who c)
++  (unless (and (continuation-prompt-available? apply-tag)
++               (eq? (continuation-mark-set-first #f load-key #f apply-tag) (ctx-load c)))
++    (error who "ctx 只能在它所属实例的这次 apply 里同步使用")))
++;在服务key上执行操作, 返回操作的结果 (Cordis: ctx.<服务>.<方法>(...))
++(define (ctx-use c key operation)
++  (check-in-apply 'ctx-use c)
++  (shift-at apply-tag k (Op key operation k)))
++;提供服务 (Cordis: ctx.provide)
++(define (ctx-provide c key init)
++  (check-in-apply 'ctx-provide c)
++  (shift-at apply-tag k (Provide key init k)))
++;装上子插件, 其生命期不超过当前实例 (Cordis: ctx.plugin)
++(define (ctx-plugin c child)
++  (check-in-apply 'ctx-plugin c)
++  (shift-at apply-tag k (Spawn child k)))
++;可选依赖是否在场
++(define (ctx-has? c key)
++  (and (member key (ctx-present c)) #t))
++;在事件总线上登记处理器, 返回令牌 (Cordis: ctx.on, 返回 disposer)
++(define (ctx-on c event handler)
++  (ctx-use c 'events (on event handler)))
+ 
+ ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
+ ;构造时reacts可以省略, 默认没有事件处理器
+-;optional是可选依赖, 默认没有; body是程序, 或者 (在场的可选依赖列表 -> 程序)
+-(struct plugin (name deps optional provides body reacts)
++;optional是可选依赖, 默认没有; apply 是 (ctx -> 任意)
++(struct plugin (name deps optional provides apply reacts)
+   #:constructor-name make-plugin
+   #:omit-define-syntaxes)
+-(define (plugin name deps provides body [reacts '()] #:optional [optional '()])
+-  (make-plugin name deps optional provides body reacts))
++(define (plugin name deps provides apply [reacts '()] #:optional [optional '()])
++  (make-plugin name deps optional provides apply reacts))
+ ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
+ ;remaining 是剩余需要执行的程序;
+ ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
+@@ -197,7 +228,7 @@
+             (define new-id (fresh-id! m))
+             (hash-set! provisions key (provision new-id id init))
+             (push-undo! (undo-provide key new-id) i)
+-            (set-instance-remaining! i next)
++            (set-instance-remaining! i (next (void)))
+             (format "提供 ~a (编号 ~a)" key new-id)])]
+     [(Spawn child next)
+      (cond [(provider-conflict m child)
+@@ -208,7 +239,7 @@
+            [else
+             (define child-id (add-instance! m child id))
+             (push-undo! (undo-spawn child-id) i)
+-            (set-instance-remaining! i next)
++            (set-instance-remaining! i (next (void)))
+             (format "安装子插件 ~a (实例 ~a)" (plugin-name child) child-id)])]))
+ 
+ ;检查编号为used-id的provision是否仍被其他实例使用
+@@ -299,12 +330,11 @@
+             (format "实例 ~a (插件 ~a) 已弃置且卸载完毕, 从管理器中移除"
+                     id name)]
+            [(and (not (instance-failure i)) wanted)
+-            (define body (plugin-body (instance-plugin i)))
+             (define present (present-optional i wanted))
+             (set-instance-phase! i 'loading)
+-            ;按在场集选变体
++            ;apply 拿到的 ctx 记下在场集, 由 ctx-has? 选变体
+             (set-instance-remaining!
+-             i (if (procedure? body) (body present) body))
++             i (apply->program (plugin-apply (instance-plugin i)) (ctx present (gensym 'load))))
+             (set-instance-undo-stack! i '())
+             (set-instance-view! i wanted)
+             (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
+@@ -492,86 +522,84 @@
+ 
+ (define core
+   (plugin "core" '() '(tools)
+-          (prog (serve 'tools (hash))
+-                (Done))))
++          (λ (ctx)
++            (ctx-provide ctx 'tools (hash)))))
+ ;提供 tools 之后自己再登记一个条目
+ (define core+
+   (plugin "core+" '() '(tools)
+-          (prog (serve 'tools (hash))
+-                ('tools (register "builtin" "内建"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-provide ctx 'tools (hash))
++            (ctx-use ctx 'tools (register "builtin" "内建")))))
+ (define shell
+   (plugin "shell" '(tools) '()
+-          (prog ('tools (register "ls" "列出文件"))
+-                ('tools (register "cat" "打印文件"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx 'tools (register "ls" "列出文件"))
++            (ctx-use ctx 'tools (register "cat" "打印文件")))))
+ (define git
+   (plugin "git" '(tools) '()
+-          (prog ('tools (register "git" "版本控制"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx 'tools (register "git" "版本控制")))))
+ ;git 的新版本: 登记的说明不同
+ (define git2
+   (plugin "git2" '(tools) '()
+-          (prog ('tools (register "git" "版本控制 (新版)"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx 'tools (register "git" "版本控制 (新版)")))))
+ ;先登记 grep, 再登记已被占用的 ls -> 失败; grep 会被自动撤掉
+ (define bad
+   (plugin "bad" '(tools) '()
+-          (prog ('tools (register "grep" "搜索"))
+-                ('tools (register "ls" "冒牌 ls"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx 'tools (register "grep" "搜索"))
++            (ctx-use ctx 'tools (register "ls" "冒牌 ls")))))
+ ;spawn: 父插件在加载中安装两个子插件, 中间自己再登记一个条目
+ (define grep-tool
+   (plugin "grep-tool" '(tools) '()
+-          (prog ('tools (register "grep" "搜索")) (Done))))
++          (λ (ctx) (ctx-use ctx 'tools (register "grep" "搜索")))))
+ (define sed-tool
+   (plugin "sed-tool" '(tools) '()
+-          (prog ('tools (register "sed" "流编辑")) (Done))))
++          (λ (ctx) (ctx-use ctx 'tools (register "sed" "流编辑")))))
+ (define toolkit
+   (plugin "toolkit" '(tools) '()
+-          (prog (spawn grep-tool)
+-                ('tools (register "help" "工具箱帮助"))
+-                (spawn sed-tool)
+-                (Done))))
++          (λ (ctx)
++            (ctx-plugin ctx grep-tool)
++            (ctx-use ctx 'tools (register "help" "工具箱帮助"))
++            (ctx-plugin ctx sed-tool))))
+ (define bus
+   (plugin "bus" '() '(events)
+-          (prog (serve 'events (hash))
+-                (Done))))
++          (λ (ctx)
++            (ctx-provide ctx 'events (hash)))))
+ (define ping
+   (plugin "ping" '(events) '()
+-          (prog ('events (on "tick" "ping"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-on ctx "tick" "ping"))))
+ ;watcher 自己登记一个处理器; 每次反应装上一个 ping, 登记一个相同的处理器
+ (define watcher
+   (plugin "watcher" '(events) '()
+-          (prog ('events (on "start" "watcher"))
+-                (Done))
++          (λ (ctx)
++            (ctx-on ctx "start" "watcher"))
+           (list ping)))
+ 
+ ;登记两个条目, 用来演示加载到一半时改道
+ (define cat-tool
+   (plugin "cat-tool" '(tools) '()
+-          (prog ('tools (register "cat2" "打印文件 2"))
+-                ('tools (register "tac" "倒序打印"))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx 'tools (register "cat2" "打印文件 2"))
++            (ctx-use ctx 'tools (register "tac" "倒序打印")))))
+ 
+ ;assistant 可选依赖 llm. 有 llm 时往 llm 登记自己, 并提供用 llm 的 summarize;
+ ;没有时提供退化的 summarize. 两个变体都提供 skills
+ (define llm-provider
+   (plugin "llm" '() '(llm)
+-          (prog (serve 'llm (hash))
+-                (Done))))
++          (λ (ctx)
++            (ctx-provide ctx 'llm (hash)))))
+ (define assistant
+   (plugin "assistant" '() '(skills)
+-          (λ (present)
+-            (if (member 'llm present)
+-                (prog (serve 'skills (hash))
+-                      ('llm (register "assistant" "使用中"))
+-                      ('skills (register "summarize" "用 llm 总结"))
+-                      (Done))
+-                (prog (serve 'skills (hash))
+-                      ('skills (register "summarize" "截取前几行"))
+-                      (Done))))
++          (λ (ctx)
++            (ctx-provide ctx 'skills (hash))
++            (cond [(ctx-has? ctx 'llm)
++                   (ctx-use ctx 'llm (register "assistant" "使用中"))
++                   (ctx-use ctx 'skills (register "summarize" "用 llm 总结"))]
++                  [else
++                   (ctx-use ctx 'skills (register "summarize" "截取前几行"))]))
+           #:optional '(llm)))
+ 
+ ;agent n 的上下文是服务 (agent n); restrict n 是挂在它上面的效应,
+@@ -579,15 +607,15 @@
+ (define (agent-key n) (list 'agent n))
+ (define (agent n)
+   (plugin (format "agent~a" n) '() (list (agent-key n))
+-          (prog (serve (agent-key n) (hash))
+-                (Done))))
++          (λ (ctx)
++            (ctx-provide ctx (agent-key n) (hash)))))
+ (define (restrict n)
+   (plugin (format "restrict~a" n) (list (agent-key n)) '()
+-          (prog ((agent-key n) (register "restricted" #t))
+-                (Done))))
++          (λ (ctx)
++            (ctx-use ctx (agent-key n) (register "restricted" #t)))))
+ (define guard
+   (plugin "guard" '() '()
+-          (prog (Done))
++          (λ (ctx) (void))
+           (list restrict)))
+ 
+ ;服务的内容, 按名字排序; 没有这个服务时为#f
+@@ -808,7 +836,7 @@
+   ;; 子插件与现存实例提供相同的服务: 父实例加载失败
+   (let ([m (make-manager)])
+     (void (install! m core))
+-    (define p (install! m (plugin "bundle" '() '() (prog (spawn core) (Done)))))
++    (define p (install! m (plugin "bundle" '() '() (λ (ctx) (ctx-plugin ctx core)))))
+     (check-equal? (instance-failure (instance-ref m p)) "子插件 core 与 core 提供了相同的服务"))
+ 
+   ;; react: 相同的处理器登记两次, 令牌让撤销只删自己那一项
+@@ -865,7 +893,7 @@
+   ;; 义务: 依赖不成环. 依赖自己提供的服务 (长度为 1 的环) 的插件永远等待, 运行时不检查 (同 Cordis);
+   ;; 别的插件也来不了: 提供同一个服务会冲突
+   (let ([m (make-manager)])
+-    (define s (install! m (plugin "selfdep" '(tools) '(tools) (prog (serve 'tools (hash)) (Done)))))
++    (define s (install! m (plugin "selfdep" '(tools) '(tools) (λ (ctx) (ctx-provide ctx 'tools (hash))))))
+     (check-eq? (instance-phase (instance-ref m s)) 'inactive)
+     (check-false (instance-failure (instance-ref m s)))
+     (check-exn #rx"相同的服务" (λ () (install! m core))))
+@@ -879,16 +907,16 @@
+   ;; 只能在依赖和自己提供的服务上操作; 只能提供声明过的服务
+   (let ([m (make-manager)])
+     (void (install! m core))
+-    (define sneaky (install! m (plugin "sneaky" '() '() (prog ('tools (register "x" 1)) (Done)))))
++    (define sneaky (install! m (plugin "sneaky" '() '() (λ (ctx) (ctx-use ctx 'tools (register "x" 1))))))
+     (check-equal? (instance-failure (instance-ref m sneaky)) "实例无法访问服务 tools")
+-    (define liar (install! m (plugin "liar" '() '() (prog (serve 'db (hash)) (Done)))))
++    (define liar (install! m (plugin "liar" '() '() (λ (ctx) (ctx-provide ctx 'db (hash))))))
+     (check-equal? (instance-failure (instance-ref m liar)) "db 不在声明的 provides () 中"))
+ 
+   ;; 提供者加载失败: 它提供的服务随之撤回, 使用者继续等待
+   (let ([m (make-manager)])
+     (define s (install! m shell))
+     (void (install! m (plugin "broken-core" '() '(tools)
+-                              (prog (serve 'tools (hash)) (Fail "坏了")))))
++                              (λ (ctx) (ctx-provide ctx 'tools (hash)) (error "坏了")))))
+     (check-false (tools-of m))
+     (check-eq? (instance-phase (instance-ref m s)) 'inactive)
+     (check-false (instance-failure (instance-ref m s))))
+@@ -943,13 +971,13 @@
+   ;; 不在场的可选依赖不能操作; 可选依赖不阻止加载
+   (let ([m (make-manager)])
+     (define peek
+-      (install! m (plugin "peek" '() '() (prog ('llm (register "x" 1)) (Done))
++      (install! m (plugin "peek" '() '() (λ (ctx) (ctx-use ctx 'llm (register "x" 1)))
+                           #:optional '(llm))))
+     (check-equal? (instance-failure (instance-ref m peek)) "实例无法访问服务 llm")
+     (define a (install! m assistant))
+     (check-eq? (instance-phase (instance-ref m a)) 'active))
+ 
+-  ;;; 可选依赖的义务 (取舍见文件开头): 违反时活锁, 运行时不检查
++  ;;; 可选依赖的义务 (取舍见第7层的开头): 违反时活锁, 运行时不检查
+ 
+   ;; 最多走 n 步; 静止了返回 #t
+   (define (quiet-within? m n)
+@@ -960,25 +988,117 @@
+   ;; install! 只拦下最简单的一种: 直接装上的插件可选依赖自己提供的服务
+   (check-exn #rx"可选依赖自己提供的服务"
+              (λ () (install! (make-manager)
+-                             (plugin "self" '() '(llm) (prog (Done)) #:optional '(llm)))))
+-  ;; 反例1: 经 spawn 装上的子插件可选依赖自己提供的服务, install! 管不到; 它一上线就重载自己
++                             (plugin "self" '() '(llm) (λ (ctx) (void)) #:optional '(llm)))))
++  ;; 反例1: 经 ctx-plugin 装上的子插件可选依赖自己提供的服务, install! 管不到; 它一上线就重载自己
+   (let ([m (make-manager)])
+-    (define selfie (plugin "selfie" '() '(x) (prog (serve 'x (hash)) (Done)) #:optional '(x)))
+-    (void (install!/raw m (plugin "par" '() '() (prog (spawn selfie) (Done)))))
++    (define selfie
++      (plugin "selfie" '() '(x) (λ (ctx) (ctx-provide ctx 'x (hash))) #:optional '(x)))
++    (void (install!/raw m (plugin "par" '() '() (λ (ctx) (ctx-plugin ctx selfie)))))
+     (check-false (quiet-within? m 1000)))
+   ;; 反例2: 经可选依赖成环. A 可选依赖 b, B 依赖 a 并提供 b:
+   ;; A 一见到 b 就重载, a 随之不可用, B 卸载, b 消失, A 再重载 ...
+   (let ([m (make-manager)])
+-    (void (install!/raw m (plugin "A" '() '(a) (prog (serve 'a (hash)) (Done)) #:optional '(b))))
+-    (void (install!/raw m (plugin "B" '(a) '(b) (prog (serve 'b (hash)) (Done)))))
++    (void (install!/raw m (plugin "A" '() '(a) (λ (ctx) (ctx-provide ctx 'a (hash))) #:optional '(b))))
++    (void (install!/raw m (plugin "B" '(a) '(b) (λ (ctx) (ctx-provide ctx 'b (hash))))))
+     (check-false (quiet-within? m 1000)))
+   ;; 对照: 必需依赖成环时不活锁, 而是谁也不加载, 静止
+   (let ([m (make-manager)])
+-    (void (install!/raw m (plugin "C" '(d) '(c) (prog (serve 'c (hash)) (Done)))))
+-    (void (install!/raw m (plugin "D" '(c) '(d) (prog (serve 'd (hash)) (Done)))))
++    (void (install!/raw m (plugin "C" '(d) '(c) (λ (ctx) (ctx-provide ctx 'c (hash))))))
++    (void (install!/raw m (plugin "D" '(c) '(d) (λ (ctx) (ctx-provide ctx 'd (hash))))))
+     (check-true (quiet-within? m 10))
+     (check-true (settled? m)))
+ 
++  ;;; ctx 与 apply
++
++  ;; apply 是普通代码: 可以用操作的结果做分支
++  (define ((lookup name) tok state)
++    (op-result state (λ (state) state) (hash-ref state name #f)))
++  (define which
++    (plugin "which" '(tools) '()
++            (λ (ctx)
++              (when (ctx-use ctx 'tools (lookup "ls"))
++                (ctx-use ctx 'tools (register "which-ls" "ls 在哪"))))))
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (void (install! m which))
++    (check-equal? (tools-of m) '())
++    (void (install! m shell))
++    (void (install! m which))
++    (check-equal? (tools-of m) '("cat" "ls" "which-ls")))
++
++  ;; apply 抛出异常: 加载失败, 已做的撤掉
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (define thrower
++      (install! m (plugin "thrower" '(tools) '()
++                          (λ (ctx)
++                            (ctx-use ctx 'tools (register "x" 1))
++                            (error 'thrower "出错了")))))
++    (check-equal? (instance-failure (instance-ref m thrower)) "apply 抛出异常: thrower: 出错了")
++    ;; 抛出的不是异常, 而是任意值: 同样是加载失败, 已做的撤掉, 只做了一次
++    (define runs 0)
++    (define raiser
++      (install! m (plugin "raiser" '(tools) '()
++                          (λ (ctx)
++                            (set! runs (add1 runs))
++                            (ctx-use ctx 'tools (register "y" 1))
++                            (raise 'oops)))))
++    (check-equal? (instance-failure (instance-ref m raiser)) "apply 抛出异常: oops")
++    (check-equal? runs 1)
++    (check-eq? (instance-phase (instance-ref m thrower)) 'inactive)
++    (check-equal? (tools-of m) '()))
++
++  ;; ctx-provide 和 ctx-plugin 也是 await 点: 它们之后的代码在指令执行之后才运行
++  (let ([m (make-manager)] [log '()])
++    (define s
++      (install!/raw m (plugin "lazy" '() '(files)
++                              (λ (ctx)
++                                (set! log (cons 'a log))
++                                (ctx-provide ctx 'files (hash))
++                                (set! log (cons (if (provision-ref m 'files) 'b 'b-too-early) log))
++                                (ctx-plugin ctx git)
++                                (set! log (cons 'c log))))))
++    (check-not-false (step! m s))                    ; 开始加载: 运行到 ctx-provide
++    (check-equal? log '(a))
++    (check-not-false (step! m s))                    ; 提供 files, 再运行到 ctx-plugin
++    (check-equal? log '(b a))
++    (check-not-false (step! m s))                    ; 装上 git, apply 返回
++    (check-equal? log '(c b a)))
++
++  ;; 每次 ctx 调用是一步: 两次调用之间的代码属于同一步, 别的插件只能插在调用之间
++  (let ([m (make-manager)] [log '()])
++    (void (install! m core))
++    (define s
++      (install!/raw m (plugin "steps" '(tools) '()
++                              (λ (ctx)
++                                (set! log (cons 'a log))
++                                (ctx-use ctx 'tools (register "s1" 1))
++                                (set! log (cons 'b log))
++                                (ctx-use ctx 'tools (register "s2" 2))
++                                (set! log (cons 'c log))))))
++    (check-not-false (step! m s))                    ; 开始加载: 运行到第一次 ctx 调用
++    (check-equal? log '(a))
++    (check-not-false (step! m s))                    ; 执行 s1, 运行到第二次 ctx 调用
++    (check-equal? log '(b a))
++    (check-equal? (tools-of m) '("s1"))
++    (check-not-false (step! m s))                    ; 执行 s2, apply 返回
++    (check-equal? log '(c b a))
++    (check-not-false (step! m s))                    ; 加载完毕
++    (check-eq? (instance-phase (instance-ref m s)) 'active))
++
++  ;; ctx 只能在 apply 里同步使用
++  (let ([m (make-manager)] [saved #f])
++    (void (install! m core))
++    (void (install! m (plugin "hoarder" '(tools) '() (λ (ctx) (set! saved ctx)))))
++    (check-exn #rx"只能在它所属实例" (λ () (ctx-use saved 'tools (register "late" 1))))
++    ;; 在别的插件的 apply 里用也不行
++    (define borrower
++      (install! m (plugin "borrower" '(tools) '()
++                          (λ (ctx) (ctx-use saved 'tools (register "borrowed" 1))))))
++    (check-equal? (instance-failure (instance-ref m borrower))
++                  "apply 抛出异常: ctx-use: ctx 只能在它所属实例的这次 apply 里同步使用")
++    (check-equal? (tools-of m) '()))
++
+   ;;; 交集生命期
+ 
+   (define (agent-setup)

@@ -1,0 +1,143 @@
+--- L4.rkt	2026-11-25 03:30:21.489635900 +0800
++++ L5.rkt	2026-11-25 03:30:21.489635900 +0800
+@@ -1,13 +1,12 @@
+ #lang racket
+-;Cordis 的渐进原型, 第4层: 子 fiber (spawn).
++;Cordis 的渐进原型, 第5层: 运行时反应.
+ ;各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 程序多了 Spawn c P: 加载中插入一个子 fiber, 它的父 fiber π 是自己, 累加器记下 USpawn m.
+-;  子 fiber 的 p 与某个现存 fiber 的相交时, 父 fiber 以 EConflict 失败.
+-;  子 fiber 的生命期不超过父 fiber: 父 fiber 卸载撤到 USpawn m 时, 先请子 fiber 退出
+-;  (L-RetireChild), 等它被移除之后才能撤过去; 有子 fiber 的 fiber 不能被移除.
+-;本层的性质: 保持性 (不变式多了第2条), 父 fiber 等子 fiber, 恢复精确性, 进展,
+-;  合流 (子 fiber 也在观察之内), 附录A (spawn 对父 fiber 的存储没有效应).
+-;引出下一层的问题: 子 fiber 只能在加载时装吗? 组件 Active 之后对事件的反应 (运行时效应) 呢?
++;本层新增: 组件多了 reacts, 一列处理器 (也是组件). fiber Active 时, 编排标签 O-React n i
++;  把第 i 个处理器作为 n 的子 fiber 插入, 并在 n 的累加器里记下 USpawn m.
++;  所以一次反应就是一个子 fiber: 不需要新的生命周期规则, 第4层的规则照管它的卸载.
++;本层的性质: 运行时效应的精确性 —— 单独移除一次反应, 只撤掉它自己的效应, 不管别的 fiber 做过什么;
++;  父 fiber 卸载时, 还在的反应先退出. 前几层的性质照旧.
++;引出下一层的问题: 编排 (插入, 移除, 重启, 反应) 与生命周期步穿插着发生时, 结果还确定吗?
+ ;记号: ⊥ / None 用 #f 表示.
+ (provide (all-defined-out))
+ 
+@@ -146,10 +145,10 @@
+ 
+ ;;; ======== 3 组件, fiber 与状态 ========
+ 
+-;组件 ⟨d, p, body⟩, body ∈ Prog(d,p)
+-(struct component (d p body))
+-(define (make-component d p body)
+-  (component d p (Prog d p body)))
++;组件 ⟨d, p, body, reacts⟩, body ∈ Prog(d,p)
++(struct component (d p body reacts))
++(define (make-component d p body [reacts '()])
++  (component d p (Prog d p body) reacts))
+ 
+ ;fiber ⟨c, π, τ, θ⟩: 组件, 父fiber (根fiber为 'root), 已请求移除, 生命周期状态
+ (struct fiber (c π τ θ) #:transparent)
+@@ -226,6 +225,7 @@
+ (struct O-Dispose (n) #:transparent)
+ (struct O-Reset (n) #:transparent)
+ (struct O-Restart (n) #:transparent)
++(struct O-React (n i) #:transparent)
+ (struct L-Begin (n) #:transparent)
+ (struct L-Step (n) #:transparent)
+ (struct L-Divert (n) #:transparent)
+@@ -280,6 +280,19 @@
+           (match (θ n)
+             [(or (Loading _ acc ω) (Active acc ω)) (θ← γ n (Unloading acc ω #f))]
+             [_ #f]))]
++    ;θ_n = Active acc ω, ¬τ_n, reacts(c_n) 的第 i 项为 c', p(c') 不冲突:
++    ;插入子fiber ⟨c', n, false, Inactive ⊥⟩, 名为 m := next, θ_n ← Active (USpawn m :: acc) ω
++    [(O-React n i)
++     (and (exists? n) (not (fiber-τ (F γ n)))
++          (match (θ n)
++            [(Active acc ω)
++             (define reacts (component-reacts (prog (c n))))
++             (and (< i (length reacts))
++                  (let ([c* (list-ref reacts i)] [m (state-next γ)])
++                    (and (not (conflict? prog γ c*))
++                         (θ← (insert γ (fiber c* n #f (Inactive #f)))
++                             n (Active (cons (USpawn m) acc) ω)))))]
++            [_ #f]))]
+     ;;; 加载
+     ;θ_n = Inactive ⊥ 且 target(n) = ω ≠ ⊥: θ_n ← Loading (body c_n) [] ω
+     [(L-Begin n)
+@@ -702,6 +715,8 @@
+                                    (Done)))
+    'bus (make-component '() '(events) (program (serve 'events (inr '())) (Done)))
+    'ping (make-component '(events) '() (program ('events (on "ping")) (Done)))
++   ;Active 之后, 每次反应运行一个 ping
++   'watcher (make-component '(events) '() (program ('events (on "watcher")) (Done)) '(ping))
+    ;按回调注册 (Cordis 的旧做法): 恢复精确性的反例
+    'old-ping (make-component '(events) '() (program ('events (inr (OnByCallback "ping"))) (Done)))))
+ (define (prog c) (hash-ref components c))
+@@ -764,7 +779,15 @@
+   (scene "移除 shell: 只撤掉 shell 登记的条目" (by 'shell O-Dispose))
+   (scene "装 local: 在自己提供的键上操作" (insert 'local))
+   (scene "装 bus 和两个 ping: 同一个回调登记两次" (insert 'bus) (insert 'ping) (insert 'ping))
+-  (scene "移除第一个 ping: 令牌让撤销只删它自己那一项" (by 'ping O-Dispose)))
++  (scene "移除第一个 ping: 令牌让撤销只删它自己那一项" (by 'ping O-Dispose))
++  ;watcher 的第一个反应
++  (define (reaction γ)
++    (define w (fiber-of γ 'watcher))
++    (for/first ([n (names γ)] #:when (match (F γ n) [(fiber _ π _ _) (equal? π w)] [#f #f])) n))
++  (scene "装 watcher" (insert 'watcher))
++  (scene "watcher 反应两次" (by 'watcher (λ (n) (O-React n 0))) (by 'watcher (λ (n) (O-React n 0))))
++  (scene "单独撤销第一次反应: O-Dispose 这个子fiber" (λ (γ) (O-Dispose (reaction γ))))
++  (scene "移除 watcher: 剩下的反应先退出" (by 'watcher O-Dispose)))
+ 
+ (module+ test
+   (require rackunit)
+@@ -909,6 +932,26 @@
+   (define second-ping
+     (cadr (filter (λ (n) (and (F γ6 n) (eq? (fiber-c (F γ6 n)) 'ping))) (names γ6))))
+   (check-equal? (tokens-of γ7) (list (token-of γ6 second-ping)))
++  ;O-React: 反应是子fiber; 单独移除一次反应只撤掉它自己的效应
++  (define (children γ n)
++    (sort (for/list ([(m f) (state-F γ)] #:when (equal? (fiber-π f) n)) m) <))
++  (define γ8 (go (orch γ7 (O-Insert 'watcher))))
++  (define w (fiber-of γ8 'watcher))
++  (check-false (step Σ prog γ8 (O-React w 1)))
++  (define γ9 (go (orch γ8 (O-React w 0) (O-React w 0))))
++  (check-equal? (handlers-of γ9) '("ping" "ping" "ping" "watcher"))
++  (check-equal? (length (children γ9 w)) 2)
++  (define γ10 (go (orch γ9 (O-Dispose (car (children γ9 w))))))
++  (check-equal? (handlers-of γ10) '("ping" "ping" "watcher"))
++  ;令牌: 撤掉的正是第一次反应登记的那一项, 别的都在
++  (check-equal? (tokens-of γ10)
++                (remove (token-of γ9 (car (children γ9 w))) (tokens-of γ9)))
++  ;移除 watcher: 剩下的反应先退出; 独立的 ping 不受影响
++  (define γ11 (go (orch γ10 (O-Dispose w))))
++  (check-equal? (handlers-of γ11) '("ping"))
++  (check-equal? (children γ11 w) '())
++  ;O-React 要求 Active 且未请求移除
++  (check-false (step Σ prog (orch γ10 (O-Dispose w)) (O-React w 0)))
+ 
+   ;;; 保持性, 进展与恢复精确性: 随机调度的执行
+   ;不含 bad, 以满足假设(H): 可能相遇的登记名字都不同
+@@ -926,7 +969,13 @@
+           (λ (γ) (O-Dispose (fiber-of γ 'shell)))
+           (λ (γ) (O-Restart (fiber-of γ 'ping)))
+           (λ (γ) (O-Dispose (fiber-of γ 'git)))
+-          (λ (γ) (O-Restart (fiber-of γ 'bus)))))
++          (λ (γ) (O-Restart (fiber-of γ 'bus)))
++          (λ (γ) (O-Insert 'watcher))
++          (λ (γ) (O-React (fiber-of γ 'watcher) 0))
++          (λ (γ) (O-React (fiber-of γ 'watcher) 0))
++          (λ (γ) (O-Restart (fiber-of γ 'watcher)))
++          (λ (γ) (O-React (fiber-of γ 'watcher) 0))
++          (λ (γ) (O-Dispose (fiber-of γ 'watcher)))))
+   ;这些执行确实各不相同, 不是同一个调度跑了六十遍
+   (check-true (> (set-count
+                   (for/set ([seed (in-range 60)])
+@@ -961,7 +1010,7 @@
+   ;;; 附录A: 单独加载与程序的解释一致
+   ;base 中已有 shell 登记的 ls, 所以 bad 的解释失败, 单独加载也失败
+   (define base (go (orch γ0 (O-Insert 'core) (O-Insert 'bus) (O-Insert 'shell))))
+-  (for ([c '(git toolkit local ping bad)])
++  (for ([c '(git toolkit local ping watcher bad)])
+     (define γ (orch base (O-Insert c)))
+     (define n (fiber-of γ c))
+     (define t (state-next γ))

@@ -1,0 +1,100 @@
+--- L5.rkt	2026-11-25 03:30:21.489635900 +0800
++++ L6.rkt	2026-11-25 03:30:21.489635900 +0800
+@@ -1,12 +1,13 @@
+ #lang racket
+-;Cordis 的渐进原型, 第5层: 运行时反应.
++;Cordis 的渐进原型, 第6层: 编排者.
+ ;各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 组件多了 reacts, 一列处理器 (也是组件). fiber Active 时, 编排标签 O-React n i
+-;  把第 i 个处理器作为 n 的子 fiber 插入, 并在 n 的累加器里记下 USpawn m.
+-;  所以一次反应就是一个子 fiber: 不需要新的生命周期规则, 第4层的规则照管它的卸载.
+-;本层的性质: 运行时效应的精确性 —— 单独移除一次反应, 只撤掉它自己的效应, 不管别的 fiber 做过什么;
+-;  父 fiber 卸载时, 还在的反应先退出. 前几层的性质照旧.
+-;引出下一层的问题: 编排 (插入, 移除, 重启, 反应) 与生命周期步穿插着发生时, 结果还确定吗?
++;本层新增: 规则一条不改. 编排者 (插件市场, 自更新, 用户) 只是编排标签的来源; 新的是这些标签
++;  可以在任何时候到来, 与生命周期步穿插 (interleave), 不必等系统静止. 比如一个组件加载到一半,
++;  它的提供者重启了: 它改道 (L-Divert), 撤掉已做的, 等提供者回来再加载.
++;本层的性质: 动态合流 —— 满足合流假设时, 穿插着插入, 重启, 移除, 最后静止于
++;  "只把幸存者按次序静态组装" 的观察; 穿插执行下的保持性, 恢复精确性与进展.
++;到此为止是 theories/Calculus.v 的核心, 加上 Runtime.v 的反应. 扩展 (可选依赖, 交集生命期)
++;  不在主线上, 见 theories/Ext/ 与 programs/cordis3.rkt; 命令式运行时见 programs/cordis.rkt.
+ ;记号: ⊥ / None 用 #f 表示.
+ (provide (all-defined-out))
+ 
+@@ -619,6 +620,24 @@
+                     (take ℓ (cdr script))
+                     (loop γ (cdr script) γs ℓs))])))
+ 
++;穿插执行: script 同上, 按顺序施加; 不等静止, 其间随机走生命周期步.
++;某一项暂不适用时先走生命周期步再试, 静止时仍不适用就跳过它.
++;返回 (values 状态序列 标签序列), 最后一个状态静止.
++(define (interleave Σ prog γ script choose)
++  (let loop ([γ γ] [script script] [γs (list γ)] [ℓs '()])
++    (define lifecycle (enabled Σ prog γ))
++    (define orch
++      (and (pair? script)
++           (let ([ℓ ((car script) γ)]) (and ℓ (step Σ prog γ ℓ) ℓ))))
++    (define (take ℓ rest)
++      (define γ* (step Σ prog γ ℓ))
++      (loop γ* rest (cons γ* γs) (cons ℓ ℓs)))
++    (cond [(and orch (or (null? lifecycle) (zero? (choose '(0 1 2)))))
++           (take orch (cdr script))]
++          [(pair? lifecycle) (take (choose lifecycle) script)]
++          [(pair? script) (loop γ (cdr script) γs ℓs)]
++          [else (values (reverse γs) (reverse ℓs))])))
++
+ ;;; ======== 附录A 单个组件的语义 ========
+ 
+ ;PEff(Γ) = Γ -> Maybe (Γ × End Γ); 结果是 (list δ g) 或 #f
+@@ -787,7 +806,9 @@
+   (scene "装 watcher" (insert 'watcher))
+   (scene "watcher 反应两次" (by 'watcher (λ (n) (O-React n 0))) (by 'watcher (λ (n) (O-React n 0))))
+   (scene "单独撤销第一次反应: O-Dispose 这个子fiber" (λ (γ) (O-Dispose (reaction γ))))
+-  (scene "移除 watcher: 剩下的反应先退出" (by 'watcher O-Dispose)))
++  (scene "移除 watcher: 剩下的反应先退出" (by 'watcher O-Dispose))
++  (scene "穿插: 新装 shell, 它登记了 ls 之后 core 重启; shell 走完在途的一步, 改道, 撤掉已登记的, 等 core 回来再加载"
++         (insert 'shell) (by 'shell L-Begin) (by 'shell L-Step) (by 'core O-Restart)))
+ 
+ (module+ test
+   (require rackunit)
+@@ -997,6 +1018,18 @@
+     ;恢复精确性: 对每个名字 n, 在 n 没有待撤销操作的每个状态, store ≃ 影子存储
+     (check-equal? (recovery-failures Σ γs ℓs) '() (format "种子 ~a" seed))
+     (check-equal? (handlers-of final) '("ping") (format "种子 ~a" seed)))
++  ;同样的脚本, 编排与生命周期步穿插
++  (for ([seed (in-range 60)])
++    (define-values (γs ℓs) (interleave Σ prog γ-start recovery-script (random-choose seed)))
++    (define final (last γs))
++    (check-false (for/first ([γ γs] #:unless (null? (wf-violations prog γ)))
++                   (wf-violations prog γ))
++                 (format "种子 ~a" seed))
++    (check-false (for/first ([γ γs] #:unless (null? (inv-violations γ))) (inv-violations γ))
++                 (format "种子 ~a" seed))
++    (check-true (and (quiet? Σ prog final) (settled? prog final)) (format "种子 ~a" seed))
++    (check-equal? (recovery-failures Σ γs ℓs) '() (format "种子 ~a" seed))
++    (check-equal? (handlers-of final) '("ping") (format "种子 ~a" seed)))
+   ;反例: 按回调注册的逆不是精确的. 两个 old-ping 之后移除第二个,
+   ;删掉的却是第一个的钩子, 存储与"第二个从没运行过"不同
+   (let-values ([(γs ℓs) (run-script Σ prog γ0
+@@ -1068,6 +1101,21 @@
+     (check-false (has-failed? final) (format "种子 ~a" seed))
+     (check-equal? (observe final normalize) expected (format "种子 ~a" seed)))
+ 
++  ;;; 动态合流: 插入, 重启, 移除与生命周期步穿插, 最后与幸存者的静态组装一致
++  (define dyn-script
++    (append
++     (for/list ([c roots]) (λ (γ) (O-Insert c)))
++     (list (λ (γ) (O-Restart (fiber-of γ 'core)))
++           (λ (γ) (O-Restart (fiber-of γ 'lis)))
++           (λ (γ) (O-Dispose (fiber-of γ 'toolkit))))))
++  (define expected-dyn (observe (assemble ΣC progC (remove 'toolkit roots)) normalize))
++  (for ([seed (in-range 200)])
++    (define-values (γs _) (interleave ΣC progC init dyn-script (random-choose seed)))
++    (define final (last γs))
++    (check-true (quiet? ΣC progC final))
++    (check-false (has-failed? final) (format "种子 ~a" seed))
++    (check-equal? (observe final normalize) expected-dyn (format "种子 ~a" seed)))
++
+   ;反例1: 有序事件总线. 两个监听者的注册次序随调度而变, 分发看得到这个次序
+   (define bus-components
+     (hash 'bus (hash-ref components 'bus)

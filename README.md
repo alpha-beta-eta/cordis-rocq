@@ -21,6 +21,11 @@ of dsh plugins; plugins' business logic is out of scope.
   lifecycle call sequences, and reports the shortest sequences that break a tier of the summary
   theorem; first-round report on the 26 audited plugins in [checker/REPORT.md](checker/REPORT.md),
   per-plugin details in [checker/FINDINGS.md](checker/FINDINGS.md).
+- [layers/](layers/): the calculus presented in seven Racket layers (services, lifecycle,
+  dependencies, confluence, spawn, reactions, orchestration), each a self-contained file that
+  adds one concept, with runnable checks of what the layer earns and diffs between layers.
+- [manager/](manager/): plan for a progressive plugin manager in Racket, thirteen layers from a
+  bare registry to Cordis itself, each a working manager with one more user-visible feature.
 - [docs/OPLIB.md](docs/OPLIB.md): the contribution model, a restricted operation library
   (read a frozen part, put a contribution) that meets the service hypotheses by construction.
 

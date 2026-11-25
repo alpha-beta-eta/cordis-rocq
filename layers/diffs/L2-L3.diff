@@ -1,0 +1,230 @@
+--- L2.rkt	2026-11-25 03:30:21.489635900 +0800
++++ L3.rkt	2026-11-25 03:30:21.489635900 +0800
+@@ -1,15 +1,14 @@
+ #lang racket
+-;Cordis 的渐进原型, 第2层: 依赖与提供.
++;Cordis 的渐进原型, 第3层: 调度无关 (合流).
+ ;各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 组件声明依赖 d 和提供 p; 程序多了 Provide k s P, 它建立绑定 ⟨ι, q, s⟩
+-;  (提供编号, 提供者, 服务状态), 卸载时撤回. fiber 开始加载时记下视图 ω (每个依赖解析到的编号),
+-;  依赖不再可见或换了编号时离开 (L-Divert, L-Leave).
+-;  卸载的守卫 held: 自己的某个提供还被别人解析着时, 什么都不撤.
+-;  新的错误: EUnresolved (操作的键解析不到), EConflict (一个程序重复提供同一个键;
+-;  两个组件声明提供同一个键时, 后插入的那个在 O-Insert 就被拒绝, 不会走到这里).
+-;本层的性质: 保持性 (不变式多了第3-8条), 次序 (依赖者在提供者之后加载, 之前卸载),
+-;  恢复精确性, 进展 (quiet ⇒ settled, settled 要求视图正确), 附录A.
+-;引出下一层的问题: 一组组件以不同的次序插入, 按不同的次序调度, 结果还一样吗?
++;本层新增: 规则一条不改. 新的是问题: 同一组组件, 插入的次序和生命周期步的调度都任意,
++;  最后静止的状态 (在观察之下: 不看名字和编号) 是否唯一?
++;  这要求服务满足合流假设: 操作在 ≃ 下两两可交换, 逆不依赖于起点 (撤销独立).
++;  新增两个服务: 监听器注册 (按多重集比较, 满足假设) 和变量存储 (不满足).
++;本层的性质: 合流 —— 满足假设时, 任意插入次序与调度都静止于同一个观察;
++;  两个反例: 有序事件总线 (分发看得到次序), 变量存储 (最后写的赢).
++;  附录B: 观察等价 —— 用测试区分两个状态.
++;引出下一层的问题: 组件在加载中自己装别的组件 (spawn), 生命期嵌套时, 这些性质还成立吗?
+ ;记号: ⊥ / None 用 #f 表示.
+ (provide (all-defined-out))
+ 
+@@ -65,6 +64,32 @@
+              (list (append s (list (cons t c))) (remove-first c) '()))]
+        [(Emit) (list s id (map cdr s))]))))
+ 
++;例: 监听器注册: 回调的列表, 按多重集比较; 逆删去第一个 c, 不需要令牌
++(struct Listen (c) #:transparent)
++(define (multiset=? l1 l2)
++  (equal? (sort (map ~s l1) string<?) (sort (map ~s l2) string<?)))
++(define (remove-first-elem c s)
++  (match s ['() '()] [(cons x s*) (if (equal? x c) s* (cons x (remove-first-elem c s*)))]))
++(define Listeners
++  (service
++   multiset=?
++   (λ (a t s)
++     (match a
++       [(Listen c) (list (append s (list c)) (λ (s*) (remove-first-elem c s*)) '())]))))
++
++;例: 变量存储: "把 x 设为 v" 的逆是改回原来的值, 依赖于起点
++(struct SetVar (x v) #:transparent)
++(define Vars
++  (service
++   equal?
++   (λ (a t s)
++     (match a
++       [(SetVar x v)
++        (define old (hash-ref s x #f))
++        (list (hash-set s x v)
++              (λ (s*) (if old (hash-set s* x old) (hash-remove s* x)))
++              #f)]))))
++
+ ;两个服务之和: 一方的操作在另一方的状态上失败
+ (struct inl (v) #:transparent)
+ (struct inr (v) #:transparent)
+@@ -481,6 +506,21 @@
+       [(fiber _ _ (Active _ ω)) (equal? (target prog γ n) ω)]            ;该运行且视图正确
+       [_ #f])))
+ 
++;;; 6.5 合流: 观察
++;fiber 记为 (组件, 是否 Active), 绑定记为 (键, 提供者的组件, 规范化的状态), 各自排序.
++;名字和提供编号取决于插入与调度的次序, 不在观察之内.
++(define (observe γ normalize)
++  (list (sort (for/list ([(n f) (state-F γ)])
++                (list (fiber-c f) (Active? (fiber-θ f))))
++              string<? #:key ~s)
++        (sort (for/list ([(k b) (state-B γ)])
++                (list k (fiber-c (F γ (binding-q b))) (normalize (binding-s b))))
++              string<? #:key ~s)))
++
++(define (has-failed? γ)
++  (for/or ([(n f) (state-F γ)])
++    (match (fiber-θ f) [(Inactive (? symbol?)) #t] [_ #f])))
++
+ ;;; ======== 调度 (不在演算之内) ========
+ 
+ (define (enabled Σ prog γ)
+@@ -501,6 +541,20 @@
+   (λ (xs) (parameterize ([current-pseudo-random-generator rng])
+             (list-ref xs (random (length xs))))))
+ 
++;用 choose 打乱一个列表
++(define (shuffle-by choose xs)
++  (let loop ([xs xs] [out '()])
++    (if (null? xs)
++        (reverse out)
++        (let ([x (choose xs)]) (loop (remove x xs) (cons x out))))))
++
++;静态组装: 按次序插入 cs, 再走生命周期步直到静止
++(define (assemble Σ prog cs #:choose [choose car])
++  (define-values (γ _)
++    (settle Σ prog (for/fold ([γ init]) ([c cs]) (orchestrate Σ prog γ (O-Insert c)))
++            #:choose choose))
++  γ)
++
+ ;编排标签必须适用
+ (define (orchestrate Σ prog γ ℓ)
+   (or (step Σ prog γ ℓ) (error 'orchestrate "标签 ~v 不适用" ℓ)))
+@@ -561,6 +615,20 @@
+ (define ((acc->store acc) σ)
+   (for/fold ([σ σ]) ([u acc]) ((undo->store u) σ)))
+ 
++;;; ======== 附录B 观察等价 ========
++
++;测试是字母的列表: (LF a t) 运行操作并记录结果, (LI g) 施加一个逆
++(struct LF (a t) #:transparent)
++(struct LI (g) #:transparent)
++(define (runTest Σ w s)
++  (let loop ([w w] [s s] [outs '()])
++    (match w
++      ['() (reverse outs)]
++      [(cons (LF a t) w*) (match (run Σ a t s)
++                            [(list s* _ o) (loop w* s* (cons o outs))]
++                            [#f #f])]
++      [(cons (LI g) w*) (loop w* (g s) outs)])))
++
+ ;;; ======== 示例 ========
+ 
+ ;Σ = Registry ⊕ EventBus
+@@ -682,6 +750,30 @@
+   (check-false (run Σ (reg "x" 1) 0 (inr '())))
+   (check-true (witnessed-at? Σ (reg "x" 1) 0 (inl (hash))))
+   (check-true (witnessed-at? Σ (on "c") 0 (inr '())))
++  (check-true (witnessed-at? Listeners (Listen "c") 0 '("c" "d")))
++  (check-true (witnessed-at? Vars (SetVar 'x 5) 0 (hash 'x 1)))
++  ;变量存储的逆依赖于起点 (违反合流假设)
++  (match-let ([(list _ g1 _) (run Vars (SetVar 'x 5) 0 (hash 'x 1))]
++              [(list _ g2 _) (run Vars (SetVar 'x 5) 0 (hash 'x 2))])
++    (check-not-equal? (g1 (hash 'x 5)) (g2 (hash 'x 5))))
++  ;撤销独立第1条在状态 x 上的一个反例 ——
++  ;b 在 x 与 g x 上不同时成功, 或结果不同, 或后继不满足 x2 ≃ g x1
++  (define (ri1-fails-at? Σ g b tb x)
++    (match* ((run Σ b tb x) (run Σ b tb (g x)))
++      [(#f #f) #f]
++      [((list x1 _ o1) (list x2 _ o2)) (not (and (equal? o1 o2) (≃ Σ x2 (g x1))))]
++      [(_ _) #t]))
++  ;注册表: 同名的两次登记不撤销独立 (后一次实际失败, 撤销前一次之后却成功)
++  (match-let ([(list s1 g _) (run Registry (Register "x" 1) 0 (hash))])
++    (check-true (ri1-fails-at? Registry g (Register "x" 2) 1 s1)))
++  ;监听器注册: f 不在 x 中时, 两次注册 f 不撤销独立 (要求 x 加上 f 之后 ≃ x)
++  ;(这个状态在注册 f 之后不可达; Services/Listeners.v 只在可达状态上要求撤销独立,
++  ;所以 Listeners 仍满足合流假设)
++  (match-let ([(list _ g _) (run Listeners (Listen "f") 0 '("c"))])
++    (check-true (ri1-fails-at? Listeners g (Listen "f") 1 '("c"))))
++  ;回调不同的两次注册撤销独立 (在这个状态上)
++  (match-let ([(list s1 g _) (run Listeners (Listen "f") 0 '("c"))])
++    (check-false (ri1-fails-at? Listeners g (Listen "h") 1 s1)))
+ 
+   ;;; 程序: Prog(d,p) 的限制由构造保证
+   (check-exn #rx"Provide" (λ () (make-component '(tools) '() (program (serve 'tools (inl (hash))) (Done)))))
+@@ -837,4 +929,73 @@
+          (check-true (store≃ Σ (undo τ) (g τ)) (~a c)))]
+       ;解释失败 (bad 的第二次 Register): 单独加载也失败
+       [#f (check-equal? c 'bad)
+-          (check-match (fiber-θ (F γ* n)) (Unloading _ _ 'EOp))])))
++          (check-match (fiber-θ (F γ* n)) (Unloading _ _ 'EOp))]))
++
++  ;;; 合流: 插入次序与调度都任意, 静止于同一个观察
++  ;服务取 Registry ⊕ Listeners (满足合流假设)
++  (define ΣC (Sum Registry Listeners))
++  (define conf-components
++    (hash
++     'core (hash-ref components 'core) 'shell (hash-ref components 'shell)
++     'git (hash-ref components 'git)
++     'hub (make-component '() '(listeners) (program (serve 'listeners (inr '())) (Done)))
++     'lis (make-component '(listeners) '() (program ('listeners (inr (Listen "a"))) (Done)))
++     'lis2 (make-component '(listeners tools) '()
++                           (program ('listeners (inr (Listen "a")))
++                                    ('tools (reg "lis2" "监听器"))
++                                    (Done)))))
++  (define (progC c) (hash-ref conf-components c))
++  (define (normalize s)
++    (match s
++      [(inl h) (sort (hash->list h) string<? #:key ~s)]
++      [(inr l) (sort l string<? #:key ~s)]))
++  (define roots '(shell core git hub lis lis2 lis))
++  (define γ-static (assemble ΣC progC roots))
++  (check-false (has-failed? γ-static))
++  (define expected (observe γ-static normalize))
++  (for ([seed (in-range 200)])
++    (define choose (random-choose seed))
++    (define final (assemble ΣC progC (shuffle-by choose roots) #:choose choose))
++    (check-true (quiet? ΣC progC final))
++    (check-false (has-failed? final) (format "种子 ~a" seed))
++    (check-equal? (observe final normalize) expected (format "种子 ~a" seed)))
++
++  ;反例1: 有序事件总线. 两个监听者的注册次序随调度而变, 分发看得到这个次序
++  (define bus-components
++    (hash 'bus (hash-ref components 'bus)
++          'pa (make-component '(events) '() (program ('events (on "a")) (Done)))
++          'pb (make-component '(events) '() (program ('events (on "b")) (Done)))))
++  (define (progE c) (hash-ref bus-components c))
++  (define emits
++    (for/set ([seed (in-range 50)])
++      (define choose (random-choose seed))
++      (define final (assemble Σ progE (shuffle-by choose '(bus pa pb)) #:choose choose))
++      (match (B final 'events)
++        [(binding _ _ (inr s)) (runTest EventBus (list (LF (Emit) 0)) s)])))
++  (check-equal? emits (set '(("a" "b")) '(("b" "a"))))
++
++  ;反例2: 变量存储. 两个组件设同一个变量, 最后写的赢
++  (define ΣV (Sum Registry Vars))
++  (define var-components
++    (hash 'vars (make-component '() '(vars) (program (serve 'vars (inr (hash))) (Done)))
++          'set1 (make-component '(vars) '() (program ('vars (inr (SetVar 'x 1))) (Done)))
++          'set2 (make-component '(vars) '() (program ('vars (inr (SetVar 'x 2))) (Done)))))
++  (define (progV c) (hash-ref var-components c))
++  (define xs
++    (for/set ([seed (in-range 50)])
++      (define choose (random-choose seed))
++      (define final (assemble ΣV progV (shuffle-by choose '(vars set1 set2)) #:choose choose))
++      (match (B final 'vars) [(binding _ _ (inr s)) (hash-ref s 'x)])))
++  (check-equal? xs (set 1 2))
++
++  ;;; 附录B: 分发暴露注册顺序, 两次注册不可交换
++  (define (reg2 first second)
++    (match-let* ([(list s1 _ _) (run EventBus (On first) 1 '())]
++                 [(list s2 _ _) (run EventBus (On second) 2 s1)])
++      s2))
++  (define s12 (reg2 "c1" "c2"))
++  (define s21 (reg2 "c2" "c1"))
++  (check-not-equal? (runTest EventBus (list (LF (Emit) 9)) s12)
++                    (runTest EventBus (list (LF (Emit) 9)) s21))
++  ;去掉分发, 监听器注册在多重集意义下可交换
++  (check-true (≃ Listeners '("c1" "c2") '("c2" "c1"))))

@@ -1,0 +1,334 @@
+--- M10.rkt	2026-11-25 03:28:48.810636100 +0800
++++ M11.rkt	2026-11-25 03:28:48.810636100 +0800
+@@ -1,16 +1,20 @@
+ #lang racket
+-;渐进的插件管理器, 第10层: 配置.
++;渐进的插件管理器, 第11层: 作用域与事件.
+ ;计划与各层的说明见 README.md. 每层是一个完整的文件, 不依赖前面的层; 相邻两层的差别见 diffs/.
+-;本层新增: 每个实例带一份配置. apply 可以写成 (ctx config) (同 Cordis 的 apply(ctx, config)),
+-;  也可以只拿 ctx, 用 ctx-config 读. install! 和 ctx-plugin 都可以给配置.
+-;  插件可以声明 #:schema 检查配置, 不合法的配置在 install!/update!/replace! 时就被拒绝.
+-;  update! 换配置 (Cordis: fiber.update): 在线或加载中的实例卸载, 再按新配置加载;
+-;  加载失败的实例清除失败, 按新配置重试 —— 这是修好一个坏配置的方法.
+-;  replace! 原地换插件 (Cordis: registry.replace): 实例编号不变, 依赖它的实例照常跟着重载.
+-;  都不需要新的卸载机制: 换配置就是"卸载后重新加载", 第3层已有.
+-;  不建模的: Cordis 允许监听 internal/update 拦下重启, 让插件就地吸收新配置;
+-;  那样旧配置下做的事留在原处, 不经撤销, 不在本模型的保证之内.
+-;留给下一层的问题: 子插件读不到父插件提供的服务, 除非也声明依赖; 事件只有登记, 没有分发.
++;本层新增三件事, 都是 Cordis 的 ctx 作用域带来的:
++;  1. 沿父链查找服务 (Cordis: locate): 子实例不声明依赖, 也能用祖先实例提供的服务.
++;     父实例先提供, 再装子实例时这是安全的: 父实例按 LIFO 卸载, 子实例在服务撤回之前就退出了.
++;     反过来 (先装子实例, 再提供) 时, 服务先于子实例撤回, 子实例的撤销被跳过 ——
++;     这就是 docs/DESIGN.md 2.1 节 e 所说的、上游 Cordis 由测试确认的问题.
++;  2. 隔离 (Cordis: isolate): (isolate 插件 键 标签) 把插件 (连同它的子插件和处理器) 里的键改名,
++;     改名后的服务是另一个服务, 两个作用域各有一份, 互不冲突. 不需要新机制, 只是改名.
++;     事件总线也可以隔离; 这时分发要指明是哪一个 (emit 的 #:service).
++;  3. 事件分发: emit 依次调用处理器, 返回结果的列表; bail 返回第一个不是 #f 的结果.
++;     ctx-on 可以带 #:prepend, 排到前面. 分发看得到处理器的次序, 而登记的次序随调度而变:
++;     两个都不 prepend 的处理器抢同一个事件时, 谁先处理与调度有关 (合流不成立, 见 layers/L3.rkt 的反例).
++;     分发不是生命周期的一步: 它只读状态, 处理器在操作之外被调用 (见 docs/DESIGN.md D6).
++;留给下一层的问题: 到这里管理器一直守着一条纪律 —— 共享状态只能经带逆的操作改动.
++;  真实的 Cordis 不守, 下一层把它放开, 看哪些保证会失效.
+ (require (only-in racket/control reset-at shift-at))
+ (provide (all-defined-out))
+ 
+@@ -33,9 +37,9 @@
+ 
+ ;apply 外面的提示符; ctx 调用中止到这里
+ (define apply-tag (make-continuation-prompt-tag 'apply))
+-;ctx 记下开始加载时在场的可选依赖, 以及实例的配置;
++;ctx 记下开始加载时在场的可选依赖, 实例的配置, 以及作用域的改名 (键 -> 键, 见isolate);
+ ;load 是这次加载的标识, ctx 只在这次加载的 apply 里有效
+-(struct ctx (present config load))
++(struct ctx (present config rename load))
+ ;把 apply 变成程序: 运行到第一次 ctx 调用为止. apply 可以拿 (ctx) 或 (ctx config)
+ ;抛出的任何值都是加载失败; 只有用户中断 (break) 照常传出去
+ (define (apply->program apply c)
+@@ -57,22 +61,27 @@
+ ;在服务key上执行操作, 返回操作的结果 (Cordis: ctx.<服务>.<方法>(...))
+ (define (ctx-use c key operation)
+   (check-in-apply 'ctx-use c)
+-  (shift-at apply-tag k (Op key operation k)))
++  (define key* ((ctx-rename c) key))
++  (shift-at apply-tag k (Op key* operation k)))
+ ;提供服务 (Cordis: ctx.provide)
+ (define (ctx-provide c key init)
+   (check-in-apply 'ctx-provide c)
+-  (shift-at apply-tag k (Provide key init k)))
+-;装上子插件, 其生命期不超过当前实例 (Cordis: ctx.plugin(child, config))
++  (define key* ((ctx-rename c) key))
++  (shift-at apply-tag k (Provide key* init k)))
++;装上子插件, 其生命期不超过当前实例 (Cordis: ctx.plugin(child, config));
++;子插件在同一个作用域里, 所以也按当前的改名改写
+ (define (ctx-plugin c child [config #f])
+   (check-in-apply 'ctx-plugin c)
+   (check-config 'ctx-plugin child config)
+-  (shift-at apply-tag k (Spawn child config k)))
++  (define child* (rename-plugin child (ctx-rename c)))
++  (shift-at apply-tag k (Spawn child* config k)))
+ ;可选依赖是否在场
+ (define (ctx-has? c key)
+-  (and (member key (ctx-present c)) #t))
+-;在事件总线上登记处理器, 返回令牌 (Cordis: ctx.on, 返回 disposer)
+-(define (ctx-on c event handler)
+-  (ctx-use c 'events (on event handler)))
++  (and (member ((ctx-rename c) key) (ctx-present c)) #t))
++;在事件总线上登记处理器, 返回令牌 (Cordis: ctx.on, 返回 disposer);
++;prepend 为真时排在不 prepend 的处理器前面
++(define (ctx-on c event handler #:prepend [prepend #f])
++  (ctx-use c 'events (on event handler #:prepend prepend)))
+ 
+ ;reacts是插件列表: 实例active时的事件处理器, 每次反应是一个子实例 (见react!)
+ ;构造时reacts可以省略, 默认没有事件处理器
+@@ -87,6 +96,28 @@
+ (define (check-config who plug config)
+   (unless ((plugin-schema plug) config)
+     (error who "插件 ~a 的配置不合法: ~a" (plugin-name plug) config)))
++;按改名 rename (键 -> 键) 改写插件: 声明里的键改名; apply 拿到的 ctx 在原有改名之前先做这次改名;
++;处理器 (插件或一族) 也同样改写
++(define (rename-plugin plug rename)
++  (define inner (plugin-apply plug))
++  (define (rename-handler h)
++    (if (plugin? h)
++        (rename-plugin h rename)
++        (λ (payload) (rename-plugin (h payload) rename))))
++  (make-plugin (plugin-name plug)
++               (map rename (plugin-deps plug))
++               (map rename (plugin-optional plug))
++               (map rename (plugin-provides plug))
++               (λ (c [config #f])
++                 (define c* (struct-copy ctx c [rename (compose (ctx-rename c) rename)]))
++                 (if (procedure-arity-includes? inner 2)
++                     (inner c* config)
++                     (inner c*)))
++               (map rename-handler (plugin-reacts plug))
++               (plugin-schema plug)))
++;隔离 (Cordis: isolate): 插件里的键key改名为 (key . label), 成为另一个服务
++(define (isolate plug key label)
++  (rename-plugin plug (λ (k) (if (equal? k key) (cons key label) k))))
+ ;phase 是 'inactive (等待依赖, 或加载失败后停下), 'loading, 'active 或 'unloading;
+ ;remaining 是剩余需要执行的程序;
+ ;view 是开始加载时记下的视图: 依赖名 -> provision的编号; failure 是失败的原因;
+@@ -199,8 +230,16 @@
+      (and (number? expected-id)
+           (= expected-id (provision-id p))
+           p)]
+-    ;情况2: 检查是否为自己提供
+-    [else (and (= (provision-owner p) id) p)]))
++    ;情况2: 自己或某个祖先实例提供的 (沿父链查找, Cordis: locate)
++    [else (and (ancestor-or-self? m id (provision-owner p)) p)]))
++;owner 是 id 自己, 或 id 的某个祖先实例
++(define (ancestor-or-self? m id owner)
++  (let loop ([id id])
++    (cond [(not id) #f]
++          [(= id owner) #t]
++          [else (loop (match (instance-ref m id)
++                        [#f #f]
++                        [i (instance-parent i)]))])))
+ 
+ ;运行实例的剩余程序一步; 返回描述
+ (define (run-instruction! m id i)
+@@ -349,7 +388,7 @@
+             ;apply 拿到的 ctx 记下在场集, 由 ctx-has? 选变体
+             (set-instance-remaining!
+              i (apply->program (plugin-apply (instance-plugin i))
+-                               (ctx present (instance-config i) (gensym 'load))))
++                               (ctx present (instance-config i) values (gensym 'load))))
+             (set-instance-undo-stack! i '())
+             (set-instance-view! i wanted)
+             (format "实例 ~a (插件 ~a) 开始加载, 依赖 (服务 . 编号): ~a~a"
+@@ -425,11 +464,13 @@
+         (hash-set state name value)
+         (λ (state) (hash-remove state name))
+         'ok)))
+-;事件处理器表: 状态是 令牌 -> (事件名 . 处理器) 的hash, 令牌的大小即登记的顺序
++;事件处理器表: 状态是 令牌 -> hook 的hash, 令牌的大小即登记的顺序
+ ;同一个处理器可以登记多次, 令牌区分各次登记, 逆只删掉自己这一次
+-(define ((on event handler) tok state)
++;处理器是过程 (分发时以事件参数调用), 或任意值 (分发时就是结果)
++(struct hook (event handler prepend?) #:transparent)
++(define ((on event handler #:prepend [prepend #f]) tok state)
+   (op-result
+-   (hash-set state tok (cons event handler))
++   (hash-set state tok (hook event handler prepend))
+    (λ (state) (hash-remove state tok))
+    tok))
+ 
+@@ -532,13 +573,25 @@
+   (trace id (format "实例 ~a 作出反应: 子实例 ~a (插件 ~a)" id child-id (plugin-name child)))
+   child-id)
+ 
+-;事件 event 发生时依次调用的处理器
+-(define (handlers-for m event)
+-  (define p (provision-ref m 'events))
++;事件 event 发生时依次调用的处理器: prepend 的在前 (后登记的更靠前), 其余按登记的顺序
++(define (handlers-for m event #:service [key 'events])
++  (define p (provision-ref m key))
+   (define state (if p (provision-state p) (hash)))
+-  (for/list ([tok (sort (hash-keys state) <)]
+-             #:when (equal? (car (hash-ref state tok)) event))
+-    (cdr (hash-ref state tok))))
++  (define hooks
++    (for/list ([tok (sort (hash-keys state) <)]
++               #:when (equal? (hook-event (hash-ref state tok)) event))
++      (hash-ref state tok)))
++  (map hook-handler
++       (append (reverse (filter hook-prepend? hooks))
++               (filter (negate hook-prepend?) hooks))))
++;分发 (Cordis: ctx.emit): 依次调用处理器, 返回结果的列表
++(define (emit m event #:service [key 'events] . args)
++  (for/list ([h (handlers-for m event #:service key)])
++    (if (procedure? h) (apply h args) h)))
++;分发到第一个不是 #f 的结果为止 (Cordis: ctx.bail)
++(define (bail m event #:service [key 'events] . args)
++  (for/or ([h (handlers-for m event #:service key)])
++    (if (procedure? h) (apply h args) h)))
+ 
+ (define (print-step id message)
+   (printf "  [~a] ~a\n" id message))
+@@ -561,7 +614,9 @@
+     (printf " ~a[编号~a, 由#~a提供]=~a" key (provision-id p) (provision-owner p)
+             (case key
+               [(tools) (sort (hash-keys (provision-state p)) string<?)]
+-              [(events) (sort (hash->list (provision-state p)) < #:key car)]
++              [(events) (sort (for/list ([(tok h) (in-hash (provision-state p))])
++                                (list tok (hook-event h) (hook-handler h)))
++                              < #:key car)]
+               [else (state-of m key)])))
+   (newline))
+ 
+@@ -665,6 +720,32 @@
+           (λ (ctx) (void))
+           (list restrict)))
+ 
++;workspace 提供 files, 再装上子插件 editor; editor 不声明依赖, 沿父链用 files
++(define editor
++  (plugin "editor" '() '()
++          (λ (ctx) (ctx-use ctx 'files (register "draft.txt" "草稿")))))
++(define workspace
++  (plugin "workspace" '() '(files)
++          (λ (ctx)
++            (ctx-provide ctx 'files (hash))
++            (ctx-plugin ctx editor))))
++;反过来: 先装 editor, 再提供 files
++(define workspace/bad
++  (plugin "workspace/bad" '() '(files)
++          (λ (ctx)
++            (ctx-plugin ctx editor)
++            (ctx-provide ctx 'files (hash)))))
++
++;两个插件都处理审批请求; ask-user 声明 prepend, 总是先问用户
++(define (approve request) 'approve)
++(define (ask request) 'ask)
++(define auto-approve
++  (plugin "auto-approve" '(events) '()
++          (λ (ctx) (ctx-on ctx "approval" approve))))
++(define ask-user
++  (plugin "ask-user" '(events) '()
++          (λ (ctx) (ctx-on ctx "approval" ask #:prepend #t))))
++
+ ;alias 按配置登记一个别名; 配置是 (名字 . 指向), 名字必须是字符串
+ (define alias
+   (plugin "alias" '(tools) '()
+@@ -754,7 +835,18 @@
+   (scene "update! alias 回 ll -> ls -l: 失败清除, 按新配置重试"
+          (λ () (update! m (hash-ref ids 'alias) '("ll" . "ls -l") #:trace print-step)))
+   (scene "replace! 把 git2 的实例原地换回 git: 编号不变"
+-         (λ () (replace! m (hash-ref ids 'git2) git #:trace print-step))))
++         (λ () (replace! m (hash-ref ids 'git2) git #:trace print-step)))
++  (scene "装 workspace: 它提供 files, 再装上 editor; editor 没有声明依赖, 沿父链用 files"
++         (λ () (install 'workspace workspace)))
++  (scene "移除 workspace: 按 LIFO, editor 先退出, files 后撤回"
++         (λ () (dispose 'workspace)))
++  (scene "隔离: 在作用域 sandbox 里另装一套 core 和 toolkit, 与外面的 tools 互不冲突"
++         (λ () (install 'sandbox-core (isolate core 'tools "sandbox"))
++               (install 'sandbox-toolkit (isolate toolkit 'tools "sandbox"))))
++  (scene "装 auto-approve 和 ask-user, 分发审批请求"
++         (λ () (install 'auto-approve auto-approve)
++               (install 'ask-user ask-user)))
++  (printf "  emit approval: ~a, bail approval: ~a\n" (emit m "approval" 'req) (bail m "approval" 'req)))
+ 
+ (module+ test
+   (require rackunit
+@@ -1233,6 +1325,81 @@
+     (check-eq? (instance-phase (instance-ref m r3)) 'inactive)
+     (check-true (settled? m)))
+ 
++  ;;; 作用域与事件
++
++  ;; 沿父链查找: editor 不声明依赖也能用父实例提供的 files; 移除时 editor 先退出
++  (let ([m (make-manager)] [messages '()])
++    (define (record id message) (set! messages (cons message messages)))
++    (define w (install! m workspace #:trace record))
++    (check-equal? (state-of m 'files) '(("draft.txt" . "草稿")))
++    (check-equal? (hash-count (manager-instances m)) 2)
++    (dispose! m w #:trace record)
++    (check-false (state-of m 'files))
++    (check-equal? (hash-count (manager-instances m)) 0)
++    (check-false (findf (λ (s) (string-prefix? s "跳过")) messages)))
++  ;; 不是祖先提供的服务仍不能用
++  (let ([m (make-manager)])
++    (void (install! m workspace))
++    (define e (install! m editor))
++    (check-equal? (instance-failure (instance-ref m e)) "实例无法访问服务 files"))
++  ;; 先装子实例再提供: 父实例按 LIFO 先撤回 files, 子实例的撤销被跳过
++  (let ([m (make-manager)] [messages '()])
++    (define w (install! m workspace/bad))
++    (check-equal? (state-of m 'files) '(("draft.txt" . "草稿")))
++    (dispose! m w #:trace (λ (id message) (set! messages (cons message messages))))
++    (check-not-false (findf (λ (s) (string-prefix? s "跳过撤销")) messages))
++    (check-equal? (hash-count (manager-instances m)) 0))
++
++  ;; 隔离: 改名后的服务是另一个服务; 子插件和处理器也在同一个作用域里
++  (let ([m (make-manager)])
++    (void (install! m core))
++    (void (install! m shell))
++    (void (install! m (isolate core 'tools "sandbox")))
++    (define t (install! m (isolate toolkit 'tools "sandbox")))
++    (check-equal? (tools-of m) '("cat" "ls"))
++    (check-equal? (map car (state-of m '(tools . "sandbox"))) '("grep" "help" "sed"))
++    ;; 隔离过的插件不与外面的冲突, 但同一作用域里仍冲突
++    (check-exn #rx"相同的服务" (λ () (install! m (isolate core 'tools "sandbox"))))
++    (dispose! m t)
++    (check-equal? (state-of m '(tools . "sandbox")) '())
++    ;; 处理器族也在作用域里: guard 的 restrict 挂在隔离过的 agent 上下文里
++    (define a (install! m (isolate (agent 5) (agent-key 5) "sandbox")))
++    (define g (install! m (isolate guard (agent-key 5) "sandbox")))
++    (void (react! m g 0 5))
++    (check-equal? (state-of m (cons (agent-key 5) "sandbox")) '(("restricted" . #t))))
++
++  ;; 事件: prepend 的处理器在前; emit 返回所有结果, bail 返回第一个
++  (let ([m (make-manager)])
++    (void (install! m bus))
++    (void (install! m auto-approve))
++    (void (install! m ask-user))
++    (check-equal? (emit m "approval" 'req) '(ask approve))
++    (check-equal? (bail m "approval" 'req) 'ask)
++    (check-equal? (emit m "tick") '())
++    ;; 隔离过的事件总线: 分发时指明是哪一个
++    (void (install! m (isolate bus 'events "sandbox")))
++    (void (install! m (isolate ping 'events "sandbox")))
++    (check-equal? (emit m "tick" #:service '(events . "sandbox")) '("ping"))
++    (check-equal? (emit m "tick") '()))
++  ;; 只有一方 prepend 时, 谁先处理与调度无关; 都不 prepend 时与调度有关
++  (define (approval-run plugins seed)
++    (define m (make-manager))
++    (for ([p (shuffle-with seed plugins)]) (void (install!/raw m p)))
++    (void (settle! m #:order (random-order seed)))
++    (bail m "approval" 'req))
++  (define (shuffle-with seed xs)
++    (define rng (make-pseudo-random-generator))
++    (parameterize ([current-pseudo-random-generator rng])
++      (random-seed seed)
++      (shuffle xs)))
++  (check-equal? (for/set ([seed (in-range 30)]) (approval-run (list bus auto-approve ask-user) seed))
++                (set 'ask))
++  (define auto-deny
++    (plugin "auto-deny" '(events) '()
++            (λ (ctx) (ctx-on ctx "approval" (λ (request) 'deny)))))
++  (check-equal? (for/set ([seed (in-range 30)]) (approval-run (list bus auto-approve auto-deny) seed))
++                (set 'approve 'deny))
++
+   ;;; 配置
+ 
+   ;; apply 拿到配置; update! 换配置后按新配置重新加载, 实例编号不变
