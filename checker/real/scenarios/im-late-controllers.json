@@ -1,0 +1,153 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "装上后"
+ },
+ {
+  "op": "services",
+  "name": "dshIm",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-im/delivery/messages",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "disable",
+  "id": "session-controller"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "session-controller 缺席时启用"
+ },
+ {
+  "op": "services",
+  "name": "dshIm",
+  "label": "session-controller 缺席时启用"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-im/delivery/messages",
+  "label": "session-controller 缺席时启用"
+ },
+ {
+  "op": "enable",
+  "id": "session-controller"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "session-controller 晚到"
+ },
+ {
+  "op": "services",
+  "name": "dshIm",
+  "label": "session-controller 晚到"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-im/delivery/messages",
+  "label": "session-controller 晚到"
+ },
+ {
+  "op": "disable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "disable",
+  "id": "workspace-controller"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "workspace-controller 缺席时启用"
+ },
+ {
+  "op": "services",
+  "name": "dshIm",
+  "label": "workspace-controller 缺席时启用"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-im/delivery/messages",
+  "label": "workspace-controller 缺席时启用"
+ },
+ {
+  "op": "enable",
+  "id": "workspace-controller"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "workspace-controller 晚到"
+ },
+ {
+  "op": "services",
+  "name": "dshIm",
+  "label": "workspace-controller 晚到"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-im/delivery/messages",
+  "label": "workspace-controller 晚到"
+ },
+ {
+  "op": "done"
+ }
+]

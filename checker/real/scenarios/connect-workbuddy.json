@@ -1,0 +1,99 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-connect-workbuddy",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-connect-workbuddy"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "停用后"
+ },
+ {
+  "op": "squat",
+  "path": "/plugins/dsh-connect-workbuddy/account-credits"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-connect-workbuddy"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-connect-workbuddy",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-connect-workbuddy"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-connect-workbuddy",
+  "label": "再停用后"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "再停用后"
+ },
+ {
+  "op": "get",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquat",
+  "path": "/plugins/dsh-connect-workbuddy/account-credits"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-connect-workbuddy"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-connect-workbuddy",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/usage",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/plugins/dsh-connect-workbuddy/account-credits",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "done"
+ }
+]

@@ -1,0 +1,106 @@
+{
+  "name": "dsh-prime-memory-fault-tools.register-1",
+  "tier": 2,
+  "check": "recovery+reload",
+  "compare": [
+    "before",
+    "after"
+  ],
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "fault",
+        "site": "tools.register",
+        "nth": 1,
+        "who": "p"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-prime-memory",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-prime-memory",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "summary": [
+    "listener process.on(beforeExit): 0 → 1",
+    "reload: + listener process.on(beforeExit) = 2",
+    "reload: - listener process.on(beforeExit) = 1"
+  ]
+}

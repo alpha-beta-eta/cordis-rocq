@@ -1,0 +1,111 @@
+{
+  "name": "dsh-windows-mcp-fault-webServer.register-2",
+  "tier": 2,
+  "check": "recovery+reload",
+  "compare": [
+    "before",
+    "after"
+  ],
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "fault",
+        "site": "webServer.register",
+        "nth": 2,
+        "who": "p"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-windows-mcp",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-windows-mcp",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "summary": [
+    "+ webServer.routes exact /dsh-windows-mcp/state (exact) @p",
+    "reload: + webServer.routes exact /dsh-windows-mcp/state (exact) @p(旧)",
+    "reload: - webServer.routes exact /dsh-windows-mcp/bridge (exact) @p",
+    "reload: - webServer.routes exact /dsh-windows-mcp/prepare (exact) @p",
+    "reload: - webServer.routes exact /dsh-windows-mcp/prepare/cancel (exact) @p",
+    "reload: - webServer.routes exact /dsh-windows-mcp/settings (exact) @p",
+    "reload: - webServer.routes exact /dsh-windows-mcp/state (exact) @p",
+    "reload: - webServer.routes exact /dsh-windows-mcp/update (exact) @p"
+  ]
+}

@@ -1,0 +1,1015 @@
+# dsh-mobile-plugin@0.5.97
+
+宿主服务: settings, webServer, tools, systemPrompt, credentials, connection, subprocess, sandboxPolicy, layout, typert, sessions, sessionProjections, jobs, uiConversation, sidebarRight, pluginNavigation, slots, settingsScope, locale, commands, theme, agentPresets, fileUpload, fileViewer, typertGateway, uiWorkspace, sidebarRightTabs, sandbox, inputTriggers, desktopPnpm, betterSidebar, workspaceRegistry, workspaceController, webTerminals, webStartup, web, uiSession, terminalController, sessionQuery, agents, sessionController, llm, sessionProjectionCache, storageDomain, sessionPersistence, attachments, subagents, agentDefaultModel, fileReferences, skills
+
+## 装上后
+
+- fiber: p/dsh-mobile-plugin#0 ACTIVE; p/dsh-mobile-plugin#1 ACTIVE
+- 登记: webServer.routes ×288, webServer.upgrades ×3, cordis.services ×9, cordis.listeners ×4
+- 没有桩的调用: typertGateway.invoke, workspaceRegistry.list, typertGateway.stream
+- 换成桩的模块: ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/relay/control.js), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/mobile/mux.js), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/relay/tunnel.js), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/mobile/relay-control.js), qrcode (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/routes/control-plane.js), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/relay/preview.js), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/relay/preview-webapp.cjs), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/remote/host.cjs), ws (require, from ../dsh-plugins/dsh-mobile-plugin/0.5.97/package/lib/remote/transport.cjs)
+
+## 第 2 层: 装上再卸载
+
+- ✗ 残留登记: + webServer.routes exact /api/cloudflare/start (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/cloudflare/stop (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/approval/rules (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/approval/rules/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/channels (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/channels/delete (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/channels/discover (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/channels/save (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/commands (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/connection-info (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/credentials (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/credentials/set (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/credentials/unset (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/deepseek-account (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/device-credential/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/device-credential/sync-identity (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/device-credential/upgrade (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/directory/create (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/directory/list (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/directory/listing (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/directory/roots (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/events/stream (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/action (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/card-state (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/cards (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/catalog (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/catalog/archive (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/catalog/file (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/data (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/dev/archive (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/dev/file (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/extension/dev/packages (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file-references (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file/create (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file/delete (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file/read (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file/rename (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/file/stat (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/branches (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/checkout (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/commit (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/commit-message (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/diff (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/capabilities (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/checks (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/commits (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/diff (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/dismiss (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/merge (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/ready (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/request-reviews (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/rerun-checks (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/review (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/review-write (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/reviewers (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/state (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/submit-review (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/track (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/update-branch (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/forge/viewed (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/log (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/overview (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/pr/checks (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/pr/comments (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/pr/merge (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/pr/ready (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/prs (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/push (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/repo (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/show (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/stage (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/unstage (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/cancel (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/cleanup (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/continue (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/request (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/restore (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/retry (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/state (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/git/worktree/stop (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/health (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/history-key (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/host-settings (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/host-settings/mutate (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/host-web (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/inbox/auto (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/inbox/clear (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/inbox/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/jobs/cancel (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/jobs/start (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/llm/models (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/llm/providers (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/model-meta (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/model-meta/apply (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/monitor (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/narration (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/notification-prefs (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/p2p/rendezvous (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/pair (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/paired-devices (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/paired-devices/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/catalog (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/cancel (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/detail (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/enabled (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/inspect (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/install (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/progress (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/registries (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/remove (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/update (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/market/versions (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/self (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/self/auto (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/update/apply (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/update/check (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugin/update/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/plugins (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/project/writes (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/push-token (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/question/respond (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/check-port (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/config (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/config/save (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/control-sync (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/diagnostics (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/enabled (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/pairing-code (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/probe (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/reconnect (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/restart-sidecar (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/relay/revoke-all (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/remote-computers/pair (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/catalog (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/create (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/delete (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/history (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/list (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/pause (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/resume (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/run (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/update (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/schedule/view (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session-log (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session-references (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/answer-sources (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/archive (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/artifacts (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/attachment (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/changes (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/delivery (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/file (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/fork (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/goal (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/head (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/local-image (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/messages (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/model-option (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/models (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/new (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/queue/update (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/read (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/rename (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/run-timeline (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/search (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/select-model (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/send (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/side-question (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/stats (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/step (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/stop (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/stop-summary (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/stream (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/team-mode (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/session/write-body (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/sessions (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/content (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/create (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/delete (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/list (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/save (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/trash (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skill/trash/restore (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/skills (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/stats/overview (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/subagents (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/subagents/interrupt (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/subagents/prompt (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/sync/inbox (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/sync/tickets (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/tunnel (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/upload/abort (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/upload/begin (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/upload/chunk (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/upload/finish (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/archive-session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/clear-archived (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/create (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/delete (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/move (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/move-session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/pin-session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/rename (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/unarchive-session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspace/unpin-session (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/mobile/v1/workspaces (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/addresses (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/check-port (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/client-half (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/config (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/desktop-read (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/devices (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/devices/history/clear (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/devices/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/faults (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/feedback (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/frp/config (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/frp/import (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/frp/stop (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/inbox/auto (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/inbox/clear (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/inbox/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/internal/approval (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/internal/issue-credential (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/internal/rotate-pairing (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/jdxb/bind (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/jdxb/install (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/jdxb/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/jdxb/url (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/onboarded (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/p2p (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/p2p/enabled (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/pairing (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/panel (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/panel/console (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/panel/remote (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/panel/settings (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/panel/setup (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/probe-direct (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/probe-relays (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/public-ip (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/read-receipt (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/reconnect (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/regenerate (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/reload-implementation (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/add (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/diagnose (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/invite (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/mode (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/open (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/open-shell (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/probe (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/remove (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/renew (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/remote-computers/stop (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/restart-sidecar (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/revoke-all (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/selfcheck (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/tailcat (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/tailcat/enabled (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/tailcat/revoke (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/toggle (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/apply (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/auto (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/check (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/ota/apply (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/ota/check (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/ota/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/update/status (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/zeronews/connect (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/zeronews/disconnect (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/zeronews/endpoints (exact) @p
+- ✗ 残留登记: + webServer.routes exact /api/relay/zeronews/prepare (exact) @p
+- ✗ 残留登记: + webServer.upgrades /api/mobile/v1/preview (upgrade) @p
+- ✗ 残留登记: + webServer.upgrades /api/mobile/v1/remote-computers/tunnel (upgrade) @p
+- ✗ 进程级改动未恢复: global globalThis.Symbol(dsh-mobile-plugin.archived-prune): (absent) → set
+- ✗ 进程级改动未恢复: global globalThis.Symbol(dsh-mobile-plugin.inbox-cleared-once): (absent) → set
+- ✗ 进程级改动未恢复: global globalThis.__dshZeroNewsCurrent: (absent) → set
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/cloudflare/start (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/cloudflare/stop (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/approval/respond (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/approval/rules (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/approval/rules/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/channels (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/channels/delete (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/channels/discover (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/channels/save (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/commands (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/connection-info (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/credentials (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/credentials/set (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/credentials/unset (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/deepseek-account (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/device-credential/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/device-credential/sync-identity (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/device-credential/upgrade (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/directory/create (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/directory/list (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/directory/listing (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/directory/roots (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/events/stream (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/action (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/card-state (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/cards (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/catalog (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/catalog/archive (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/catalog/file (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/data (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/dev/archive (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/dev/file (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/extension/dev/packages (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file-references (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file/create (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file/delete (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file/read (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file/rename (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/file/stat (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/branches (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/checkout (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/commit (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/commit-message (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/diff (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/capabilities (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/checks (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/commits (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/diff (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/dismiss (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/merge (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/ready (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/request-reviews (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/rerun-checks (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/review (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/review-write (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/reviewers (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/state (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/submit-review (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/track (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/update-branch (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/forge/viewed (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/log (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/overview (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/pr/checks (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/pr/comments (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/pr/merge (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/pr/ready (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/prs (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/push (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/repo (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/show (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/stage (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/unstage (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/cancel (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/cleanup (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/continue (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/request (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/restore (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/retry (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/state (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/git/worktree/stop (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/health (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/history-key (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/host-settings (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/host-settings/mutate (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/host-web (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/inbox/auto (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/inbox/clear (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/inbox/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/jobs/cancel (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/jobs/start (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/llm/models (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/llm/providers (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/model-meta (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/model-meta/apply (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/monitor (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/narration (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/notification-prefs (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/p2p/rendezvous (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/pair (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/paired-devices (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/paired-devices/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/catalog (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/cancel (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/detail (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/enabled (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/inspect (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/install (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/progress (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/registries (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/remove (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/update (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/market/versions (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/self (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/self/auto (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/update/apply (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/update/check (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugin/update/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/plugins (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/project/writes (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/push-token (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/question/respond (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/check-port (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/config (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/config/save (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/control-sync (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/diagnostics (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/enabled (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/pairing-code (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/probe (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/reconnect (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/restart-sidecar (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/relay/revoke-all (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/remote-computers/pair (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/catalog (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/create (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/delete (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/history (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/list (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/pause (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/resume (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/run (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/update (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/schedule/view (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session-log (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session-references (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/answer-sources (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/archive (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/artifacts (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/attachment (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/changes (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/delivery (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/file (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/fork (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/goal (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/head (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/local-image (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/messages (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/model-option (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/models (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/new (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/queue/update (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/read (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/rename (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/run-timeline (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/search (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/select-model (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/send (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/side-question (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/stats (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/step (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/stop (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/stop-summary (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/stream (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/team-mode (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/session/write-body (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/sessions (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/content (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/create (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/delete (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/list (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/save (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/trash (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skill/trash/restore (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/skills (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/stats/overview (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/subagents (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/subagents/interrupt (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/subagents/prompt (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/sync/inbox (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/sync/tickets (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/tunnel (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/upload/abort (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/upload/begin (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/upload/chunk (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/upload/finish (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/archive-session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/clear-archived (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/create (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/delete (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/move (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/move-session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/pin-session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/rename (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/unarchive-session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspace/unpin-session (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/mobile/v1/workspaces (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/addresses (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/check-port (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/client-half (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/config (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/desktop-read (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/devices (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/devices/history/clear (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/devices/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/faults (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/feedback (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/frp/config (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/frp/import (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/frp/stop (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/inbox/auto (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/inbox/clear (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/inbox/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/internal/approval (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/internal/issue-credential (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/internal/rotate-pairing (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/jdxb/bind (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/jdxb/install (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/jdxb/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/jdxb/url (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/onboarded (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/p2p (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/p2p/enabled (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/pairing (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/panel (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/panel/console (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/panel/remote (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/panel/settings (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/panel/setup (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/probe-direct (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/probe-relays (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/public-ip (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/read-receipt (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/reconnect (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/regenerate (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/reload-implementation (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/add (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/diagnose (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/invite (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/mode (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/open (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/open-shell (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/probe (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/remove (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/renew (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/remote-computers/stop (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/restart-sidecar (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/revoke-all (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/selfcheck (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/tailcat (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/tailcat/enabled (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/tailcat/revoke (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/toggle (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/apply (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/auto (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/check (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/ota/apply (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/ota/check (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/ota/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/update/status (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/zeronews/connect (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/zeronews/disconnect (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/zeronews/endpoints (exact) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.routes exact /api/relay/zeronews/prepare (exact) @p(旧)
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/cloudflare/start (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/cloudflare/stop (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/approval/rules (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/approval/rules/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/channels (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/channels/delete (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/channels/discover (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/channels/save (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/commands (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/connection-info (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/credentials (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/credentials/set (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/credentials/unset (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/deepseek-account (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/device-credential/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/device-credential/sync-identity (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/device-credential/upgrade (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/directory/create (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/directory/list (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/directory/listing (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/directory/roots (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/events/stream (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/action (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/card-state (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/cards (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/catalog (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/catalog/archive (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/catalog/file (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/data (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/dev/archive (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/dev/file (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/extension/dev/packages (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file-references (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file/create (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file/delete (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file/read (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file/rename (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/file/stat (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/branches (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/checkout (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/commit (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/commit-message (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/diff (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/capabilities (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/checks (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/commits (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/diff (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/dismiss (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/merge (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/ready (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/request-reviews (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/rerun-checks (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/review (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/review-write (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/reviewers (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/state (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/submit-review (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/track (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/update-branch (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/forge/viewed (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/log (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/overview (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/pr/checks (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/pr/comments (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/pr/merge (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/pr/ready (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/prs (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/push (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/repo (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/show (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/stage (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/unstage (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/cancel (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/cleanup (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/continue (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/request (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/restore (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/retry (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/state (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/git/worktree/stop (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/health (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/history-key (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/host-settings (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/host-settings/mutate (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/host-web (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/inbox/auto (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/inbox/clear (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/inbox/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/jobs/cancel (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/jobs/start (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/llm/models (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/llm/providers (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/model-meta (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/model-meta/apply (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/monitor (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/narration (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/notification-prefs (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/p2p/rendezvous (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/pair (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/paired-devices (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/paired-devices/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/catalog (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/cancel (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/detail (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/enabled (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/inspect (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/install (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/progress (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/registries (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/remove (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/update (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/market/versions (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/self (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/self/auto (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/update/apply (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/update/check (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugin/update/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/plugins (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/project/writes (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/push-token (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/question/respond (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/check-port (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/config (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/config/save (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/control-sync (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/diagnostics (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/enabled (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/pairing-code (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/probe (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/reconnect (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/restart-sidecar (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/relay/revoke-all (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/remote-computers/pair (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/catalog (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/create (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/delete (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/history (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/list (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/pause (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/resume (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/run (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/update (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/schedule/view (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session-log (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session-references (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/answer-sources (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/archive (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/artifacts (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/attachment (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/changes (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/delivery (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/file (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/fork (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/goal (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/head (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/local-image (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/messages (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/model-option (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/models (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/new (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/queue/update (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/read (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/rename (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/run-timeline (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/search (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/select-model (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/send (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/side-question (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/stats (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/step (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/stop (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/stop-summary (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/stream (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/team-mode (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/session/write-body (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/sessions (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/content (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/create (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/delete (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/list (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/save (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/trash (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skill/trash/restore (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/skills (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/stats/overview (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/subagents (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/subagents/interrupt (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/subagents/prompt (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/sync/inbox (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/sync/tickets (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/tunnel (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/upload/abort (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/upload/begin (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/upload/chunk (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/upload/finish (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/archive-session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/clear-archived (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/create (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/delete (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/move (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/move-session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/pin-session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/rename (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/unarchive-session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspace/unpin-session (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/mobile/v1/workspaces (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/addresses (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/check-port (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/client-half (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/config (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/desktop-read (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/devices (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/devices/history/clear (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/devices/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/faults (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/feedback (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/frp/config (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/frp/import (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/frp/stop (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/inbox/auto (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/inbox/clear (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/inbox/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/internal/approval (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/internal/issue-credential (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/internal/rotate-pairing (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/jdxb/bind (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/jdxb/install (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/jdxb/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/jdxb/url (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/onboarded (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/p2p (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/p2p/enabled (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/pairing (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/panel (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/panel/console (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/panel/remote (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/panel/settings (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/panel/setup (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/probe-direct (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/probe-relays (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/public-ip (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/read-receipt (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/reconnect (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/regenerate (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/reload-implementation (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/add (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/diagnose (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/invite (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/mode (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/open (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/open-shell (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/probe (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/remove (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/renew (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/remote-computers/stop (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/restart-sidecar (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/revoke-all (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/selfcheck (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/tailcat (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/tailcat/enabled (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/tailcat/revoke (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/toggle (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/apply (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/auto (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/check (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/ota/apply (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/ota/check (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/ota/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/update/status (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/zeronews/connect (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/zeronews/disconnect (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/zeronews/endpoints (exact) @p
+- ✗ 再装与第一次装上不同: - webServer.routes exact /api/relay/zeronews/prepare (exact) @p
+- ✗ 再装与第一次装上不同: + webServer.upgrades /api/mobile/v1/preview (upgrade) @p(旧)
+- ✗ 再装与第一次装上不同: + webServer.upgrades /api/mobile/v1/remote-computers/tunnel (upgrade) @p(旧)
+- ✗ 再装与第一次装上不同: - webServer.upgrades /api/mobile/v1/preview (upgrade) @p
+- ✗ 再装与第一次装上不同: - webServer.upgrades /api/mobile/v1/remote-computers/tunnel (upgrade) @p
+- ✗ 再装与第一次装上不同: + handle Timeout = 2
+- ✗ 再装与第一次装上不同: - handle Timeout = 3
+- ○ 持久状态 (R4, 只报告): + fs relay.json
+
+## 第 2 层: 中途抛错 (R1)
+
+插件在 apply 期间调用的宿主方法: webServer.registerUpgrade ×3, webServer.register ×288
+
+- ✗ webServer.registerUpgrade: 3/3 个故障点卸载后有残留; 3/3 个故障点之后再装与正常装上不同.
+  最小的 k = 1:
+  - 卸载后残留 + webServer.routes exact /api/cloudflare/start (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/cloudflare/stop (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+  - 卸载后残留 + webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+  - … 共 288 条
+  - 再装: + webServer.routes exact /api/cloudflare/start (exact) @p(旧)
+  - 再装: + webServer.routes exact /api/cloudflare/stop (exact) @p(旧)
+  - 再装: + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p(旧)
+  - 再装: + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p(旧)
+  - 再装: + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p(旧)
+  - 再装: + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p(旧)
+  - 再装: + handle Timeout = 2
+  - 再装: - handle Timeout = 3
+- ✗ webServer.register: 63/64 个故障点卸载后有残留; 63/64 个故障点之后再装与正常装上不同.
+  最小的 k = 2:
+  - 卸载后残留 + webServer.routes exact /api/relay/host-half (exact) @p
+  - 再装: + webServer.routes exact /api/relay/host-half (exact) @p(旧)
+  - 再装: - webServer.routes exact /api/cloudflare/start (exact) @p
+  - 再装: - webServer.routes exact /api/cloudflare/stop (exact) @p
+  - 再装: - webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+  - 再装: - webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+  - 再装: - webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+  - 再装: - global globalThis.Symbol(dsh-mobile-plugin.archived-prune) added
+  - 再装: - global globalThis.Symbol(dsh-mobile-plugin.inbox-cleared-once) added
+  - 再装: - global globalThis.__dshZeroNewsCurrent added
+  残留最多的是 k = 3: 287 条.
+
+## 第 3 层: 服务晚到 (C2)
+
+- ✓ 其余 50 个服务晚到时与先到相同.
+
+## 第 3 层: 提供者重启 (C2)
+
+- ✗ webServer 的提供者重启后, 落定状态不同:
+  - + handle Timeout = 2
+  - - handle Timeout = 3
+- ✗ webStartup 的提供者重启后, 落定状态不同:
+  - cordis.listeners: [p | p | p | p] → [p > p | p > p | p > p | p > p]
+  - + cordis.fibers p/dsh-mobile-plugin#2 (ACTIVE) @p
+  - + handle TCPServerWrap = 2
+  - + handle Timeout = 5
+  - - handle TCPServerWrap = 1
+  - - handle Timeout = 3
+- ✓ 其余 48 个服务重启后与重启前相同.
+
+## 见证
+
+### dsh-mobile-plugin-unload (第 2 层)
+
+```
+1. install(dsh-mobile-plugin) as p                                  O-Insert
+2. dispose(p)                                                       O-Dispose
+3. install(dsh-mobile-plugin) as p2                                 O-Insert
+```
+
+- + webServer.routes exact /api/cloudflare/start (exact) @p
+- + webServer.routes exact /api/cloudflare/stop (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/rules (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/rules/revoke (exact) @p
+
+重放: `sh check.sh replay witnesses/dsh-mobile-plugin-unload.json`
+
+### dsh-mobile-plugin-fault-webServer.registerUpgrade-1 (第 2 层)
+
+```
+1. webServer.registerUpgrade call #1 by p throws                    L-Fail at the k-th call
+2. install(dsh-mobile-plugin) as p                                  O-Insert
+3. dispose(p)                                                       O-Dispose
+4. install(dsh-mobile-plugin) as p2                                 O-Insert
+```
+
+- + webServer.routes exact /api/cloudflare/start (exact) @p
+- + webServer.routes exact /api/cloudflare/stop (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+- + webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/rules (exact) @p
+- + webServer.routes exact /api/mobile/v1/approval/rules/revoke (exact) @p
+
+重放: `sh check.sh replay witnesses/dsh-mobile-plugin-fault-webServer.registerUpgrade-1.json`
+
+### dsh-mobile-plugin-fault-webServer.register-2 (第 2 层)
+
+```
+1. webServer.register call #2 by p throws                           L-Fail at the k-th call
+2. install(dsh-mobile-plugin) as p                                  O-Insert
+3. dispose(p)                                                       O-Dispose
+4. install(dsh-mobile-plugin) as p2                                 O-Insert
+```
+
+- + webServer.routes exact /api/relay/host-half (exact) @p
+- reload: + webServer.routes exact /api/relay/host-half (exact) @p(旧)
+- reload: - webServer.routes exact /api/cloudflare/start (exact) @p
+- reload: - webServer.routes exact /api/cloudflare/stop (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/agent-presets (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/agent-presets/copy (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/agent-presets/default (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/agent-presets/read (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/agent-presets/remove (exact) @p
+- reload: - webServer.routes exact /api/mobile/v1/approval/respond (exact) @p
+
+重放: `sh check.sh replay witnesses/dsh-mobile-plugin-fault-webServer.register-2.json`
+
+### dsh-mobile-plugin-restart-webServer (第 3 层): 不稳定, 无结论
+
+再判定两次, 差异不总相同 (多半是有异步活动没有落定), 不作为见证.
+
+### dsh-mobile-plugin-restart-webStartup (第 3 层): 不稳定, 无结论
+
+再判定两次, 差异不总相同 (多半是有异步活动没有落定), 不作为见证.
+
+(共 168 次运行, 132.9 秒)

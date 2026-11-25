@@ -1,0 +1,123 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "epoch",
+  "id": "image-gen",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "装上后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "web-startup"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "web-startup"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "epoch",
+  "id": "image-gen",
+  "label": "webStartup 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "webStartup 重启后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "webStartup 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "webStartup 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "webStartup 重启后"
+ },
+ {
+  "op": "disable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "epoch",
+  "id": "image-gen",
+  "label": "systemPrompt 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "systemPrompt 重启后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "systemPrompt 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "systemPrompt 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "systemPrompt 重启后"
+ },
+ {
+  "op": "done"
+ }
+]

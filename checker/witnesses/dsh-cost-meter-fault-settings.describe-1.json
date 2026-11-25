@@ -1,0 +1,105 @@
+{
+  "name": "dsh-cost-meter-fault-settings.describe-1",
+  "tier": 2,
+  "check": "recovery+reload",
+  "compare": [
+    "before",
+    "after"
+  ],
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "fault",
+        "site": "settings.describe",
+        "nth": 1,
+        "who": "p"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-cost-meter",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-cost-meter",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "summary": [
+    "global globalThis.Symbol(dsh-cost-meter.billion-context.peers.v1): (absent) → set",
+    "reload: - handle Timeout = 1"
+  ]
+}

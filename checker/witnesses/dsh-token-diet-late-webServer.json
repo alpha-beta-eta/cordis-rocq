@@ -1,0 +1,164 @@
+{
+  "name": "dsh-token-diet-late-webServer",
+  "tier": 3,
+  "check": "confluence",
+  "against": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-token-diet",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-token-diet",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "againstSnap": "loaded",
+  "scenario": {
+    "host": [
+      "settings",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "install",
+        "plugin": "dsh-token-diet",
+        "id": "p"
+      },
+      {
+        "op": "provide",
+        "service": "webServer"
+      },
+      {
+        "op": "snap",
+        "label": "final"
+      }
+    ]
+  },
+  "snap": "final",
+  "summary": [
+    "- webServer.routes prefix /token-diet (prefix) @p"
+  ]
+}

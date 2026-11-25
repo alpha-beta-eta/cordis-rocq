@@ -17,6 +17,10 @@ of dsh plugins; plugins' business logic is out of scope.
 - [docs/EXTENSIONS.md](docs/EXTENSIONS.md): extensions kept apart from the core (`theories/Ext/`,
   which the core never imports): optional dependencies (formalized: rules, correspondence with the
   core, safety, no deadlock, recovery, termination, confluence with spawn and under orchestration), orchestrator obligations and intersection lifetimes (formalized).
+- [checker/](checker/): cordis-check, which runs real dsh plugins on the real Cordis, enumerates
+  lifecycle call sequences, and reports the shortest sequences that break a tier of the summary
+  theorem; first-round report on the 26 audited plugins in [checker/REPORT.md](checker/REPORT.md),
+  per-plugin details in [checker/FINDINGS.md](checker/FINDINGS.md).
 - [docs/OPLIB.md](docs/OPLIB.md): the contribution model, a restricted operation library
   (read a frozen part, put a contribution) that meets the service hypotheses by construction.
 

@@ -1,0 +1,46 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 6000
+ },
+ {
+  "op": "proc",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "proc",
+  "label": "xmanrui-dsh-im 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "proc",
+  "label": "xmanrui-dsh-im 再启用后"
+ },
+ {
+  "op": "done"
+ }
+]

@@ -1,0 +1,122 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "skillProviders",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "skill"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "skillProviders",
+  "label": "skills 停用时"
+ },
+ {
+  "op": "enable",
+  "id": "skill"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "skillProviders",
+  "label": "skills 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "skills 重启后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "disable",
+  "id": "skill"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "skills 缺席时启用"
+ },
+ {
+  "op": "enable",
+  "id": "skill"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "skillProviders",
+  "label": "skills 晚到"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "skills 晚到"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "skillProviders",
+  "label": "插件重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "插件重启后"
+ },
+ {
+  "op": "done"
+ }
+]

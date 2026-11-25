@@ -1,0 +1,99 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "停用后"
+ },
+ {
+  "op": "squat",
+  "path": "/dsh-market/telemetry"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "再停用后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "再停用后"
+ },
+ {
+  "op": "get",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquat",
+  "path": "/dsh-market/telemetry"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "done"
+ }
+]

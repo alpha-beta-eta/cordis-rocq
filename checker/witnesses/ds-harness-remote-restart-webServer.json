@@ -1,0 +1,169 @@
+{
+  "name": "ds-harness-remote-restart-webServer",
+  "tier": 3,
+  "check": "confluence",
+  "against": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "againstSnap": "loaded",
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p"
+      },
+      {
+        "op": "withdraw",
+        "service": "webServer"
+      },
+      {
+        "op": "provide",
+        "service": "webServer"
+      },
+      {
+        "op": "snap",
+        "label": "final"
+      }
+    ]
+  },
+  "snap": "final",
+  "summary": [
+    "- webServer.routes prefix /ds-harness-remote (prefix) @p"
+  ]
+}

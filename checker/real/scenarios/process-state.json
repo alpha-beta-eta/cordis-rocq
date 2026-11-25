@@ -1,0 +1,341 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 8000
+ },
+ {
+  "op": "entries",
+  "match": "",
+  "label": "条目"
+ },
+ {
+  "op": "proc",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "dsh-whale-widget 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-whale-widget 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "dsh-whale-widget 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-whale-widget 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "session-superagent"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "session-superagent 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "session-superagent 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "session-superagent"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "session-superagent 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "session-superagent 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "cost-meter"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "cost-meter",
+  "label": "cost-meter 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "cost-meter 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "cost-meter"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "cost-meter",
+  "label": "cost-meter 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "cost-meter 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "ds-harness-remote 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "ds-harness-remote 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "ds-harness-remote 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "ds-harness-remote 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-pet"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-pet",
+  "label": "dsh-pet 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-pet 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-pet"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-pet",
+  "label": "dsh-pet 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-pet 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-memory"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-memory",
+  "label": "dsh-memory 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-memory 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-memory"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-memory",
+  "label": "dsh-memory 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-memory 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "xmanrui-dsh-im 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "xmanrui-dsh-im 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "xmanrui-dsh-im"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "xmanrui-dsh-im",
+  "label": "xmanrui-dsh-im 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "xmanrui-dsh-im 再启用后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-mobile"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 2000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-mobile",
+  "label": "dsh-mobile 停用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-mobile 停用后"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-mobile"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 4000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-mobile",
+  "label": "dsh-mobile 再启用后"
+ },
+ {
+  "op": "proc",
+  "label": "dsh-mobile 再启用后"
+ },
+ {
+  "op": "done"
+ }
+]

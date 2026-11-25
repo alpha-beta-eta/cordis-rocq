@@ -1,0 +1,170 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "装上后"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 1000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "正常停用后"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "正常停用后"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "正常再启用后 (对照)"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "正常再启用后 (对照)"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "squatSection",
+  "name": "dsh-ops:repository-tooling:mode-ptc"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "段名被占时启用"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "段名被占时启用"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 1000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "再停用后"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquatSection",
+  "name": "dsh-ops:repository-tooling:mode-ptc"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "撤掉占位后再启用"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "撤掉占位后再启用"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-ops"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-ops",
+  "label": "再正常重启一次"
+ },
+ {
+  "op": "sections",
+  "prefix": "dsh-ops:",
+  "label": "再正常重启一次"
+ },
+ {
+  "op": "done"
+ }
+]

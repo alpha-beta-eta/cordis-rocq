@@ -1,0 +1,18 @@
+[
+  { "op": "settle" },
+  { "op": "fibers", "id": "windows-mcp-plugin", "label": "装上后" },
+  { "op": "route", "path": "/dsh-windows-mcp/state", "label": "装上后" },
+  { "op": "get", "path": "/dsh-windows-mcp/state", "label": "装上后" },
+  { "op": "get", "path": "/dsh-windows-mcp/no-such-route", "label": "对照: 不存在的路由" },
+  { "op": "disable", "id": "windows-mcp-plugin" },
+  { "op": "settle" },
+  { "op": "fibers", "id": "windows-mcp-plugin", "label": "停用后" },
+  { "op": "route", "path": "/dsh-windows-mcp/state", "label": "停用后" },
+  { "op": "get", "path": "/dsh-windows-mcp/state", "label": "停用后" },
+  { "op": "enable", "id": "windows-mcp-plugin" },
+  { "op": "settle" },
+  { "op": "fibers", "id": "windows-mcp-plugin", "label": "再启用后" },
+  { "op": "route", "path": "/dsh-windows-mcp/state", "label": "再启用后" },
+  { "op": "get", "path": "/dsh-windows-mcp/state", "label": "再启用后" },
+  { "op": "done" }
+]

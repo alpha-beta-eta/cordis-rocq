@@ -1,0 +1,182 @@
+{
+  "name": "ds-harness-remote-late-webServer",
+  "tier": 3,
+  "check": "confluence",
+  "against": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "againstSnap": "loaded",
+  "scenario": {
+    "host": [
+      "settings",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "install",
+        "plugin": "ds-harness-remote",
+        "id": "p"
+      },
+      {
+        "op": "provide",
+        "service": "webServer"
+      },
+      {
+        "op": "snap",
+        "label": "final"
+      }
+    ]
+  },
+  "snap": "final",
+  "summary": [
+    "- tools remote_create_session (tool) @p",
+    "- tools remote_download_file (tool) @p",
+    "- tools remote_get_operation (tool) @p",
+    "- tools remote_interrupt_session (tool) @p",
+    "- tools remote_list_hosts (tool) @p",
+    "- tools remote_list_presets (tool) @p",
+    "- tools remote_list_sessions (tool) @p",
+    "- tools remote_list_workspaces (tool) @p",
+    "- tools remote_read_session (tool) @p",
+    "- tools remote_select_preset (tool) @p",
+    "- tools remote_send_message (tool) @p",
+    "- tools remote_upload_file (tool) @p",
+    "- tools remote_wait_sessions (tool) @p",
+    "- webServer.routes prefix /ds-harness-remote (prefix) @p",
+    "- cordis.services dshRemote (service) @p",
+    "+ cordis.fibers p/activateWhenCarrierReady#0 (FAILED: cannot get property \"webServer\" without inject) @p",
+    "- cordis.fibers p/activateWhenCarrierReady#0 (ACTIVE) @p",
+    "- cordis.fibers p/activateWhenCarrierReady#1 (ACTIVE) @p",
+    "- cordis.fibers p/scope#0 (ACTIVE) @p"
+  ]
+}

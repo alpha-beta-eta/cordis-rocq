@@ -1,0 +1,183 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 8000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-mobile",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/mobile/",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/relay/",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/cloudflare/",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/mobile/v1/commands",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/relay/host-half",
+  "label": "装上后"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/commands",
+  "label": "装上后"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/no-such-route",
+  "label": "装上后 (对照: 不存在的路由)"
+ },
+ {
+  "op": "get",
+  "path": "/cordis-check-no-such-path",
+  "label": "装上后 (对照: 不属于插件的路径)"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 8000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-mobile",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/mobile/",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/relay/",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/cloudflare/",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/mobile/v1/commands",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/relay/host-half",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/commands",
+  "label": "webServer 重启 1 次"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/no-such-route",
+  "label": "webServer 重启 1 次 (对照: 不存在的路由)"
+ },
+ {
+  "op": "get",
+  "path": "/cordis-check-no-such-path",
+  "label": "webServer 重启 1 次 (对照: 不属于插件的路径)"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 8000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-mobile",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/mobile/",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/relay/",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "routes",
+  "prefix": "/api/cloudflare/",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/mobile/v1/commands",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/relay/host-half",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/commands",
+  "label": "webServer 重启 2 次"
+ },
+ {
+  "op": "get",
+  "path": "/api/mobile/v1/no-such-route",
+  "label": "webServer 重启 2 次 (对照: 不存在的路由)"
+ },
+ {
+  "op": "get",
+  "path": "/cordis-check-no-such-path",
+  "label": "webServer 重启 2 次 (对照: 不属于插件的路径)"
+ },
+ {
+  "op": "done"
+ }
+]

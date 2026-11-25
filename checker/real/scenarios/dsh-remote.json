@@ -1,0 +1,99 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "停用后"
+ },
+ {
+  "op": "squat",
+  "path": "/dsh-remote/status"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "再停用后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "再停用后"
+ },
+ {
+  "op": "get",
+  "path": "/dsh-remote/workspace-context",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquat",
+  "path": "/dsh-remote/status"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/status",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "done"
+ }
+]

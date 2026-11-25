@@ -1,0 +1,151 @@
+{
+  "name": "dsh-remote-fault-webServer.register-2",
+  "tier": 2,
+  "check": "recovery+reload",
+  "compare": [
+    "before",
+    "after"
+  ],
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "fault",
+        "site": "webServer.register",
+        "nth": 2,
+        "who": "p"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-remote",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-remote",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "summary": [
+    "+ webServer.routes exact /dsh-remote/workspace-context (exact) @p",
+    "reload: + webServer.routes exact /dsh-remote/workspace-context (exact) @p(旧)",
+    "reload: - webServer.routes exact /dsh-remote/audit (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/bindings (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/connect (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/current (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/explorer-auto-open (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/forget-key (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/forwards (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/fs (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/git (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/home (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/local-copy/publish (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/local-copy/read (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/local-list (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/local-mkdir (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/local-pick (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/ls (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/machines (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/mirror (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/read (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/resolve-mirror (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/search (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/ssh-config (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/status (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/task (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/tasks (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/telemetry (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term-secret (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/close (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/input (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/list (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/open (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/output (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/term/resize (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/test-connect (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/update-apply (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/update-check (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/update-mode (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/update-reload (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/web-attach (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/workspace (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/workspace-cleanup (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/workspace-context (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/workspace-mirrors (exact) @p",
+    "reload: - webServer.routes exact /dsh-remote/write (exact) @p",
+    "reload: + cordis.fibers p/dsh-remote#2 (FAILED: duplicate webServer.routes \"exact /dsh-remote/workspace-context\") @p",
+    "reload: - cordis.fibers p/dsh-remote#2 (ACTIVE) @p"
+  ]
+}

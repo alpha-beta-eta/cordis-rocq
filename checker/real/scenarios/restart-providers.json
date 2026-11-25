@@ -1,0 +1,234 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "image-gen",
+  "label": "装上后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/reference-updated",
+  "label": "装上后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "fibers",
+  "id": "image-gen",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/reference-updated",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "systemPrompt 重启 1 次"
+ },
+ {
+  "op": "disable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "system-prompt"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "fibers",
+  "id": "image-gen",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/reference-updated",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "systemPrompt 重启 2 次"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "image-gen",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/reference-updated",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "disable",
+  "id": "settings"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "settings"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "image-gen",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/reference-updated",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "listeners",
+  "event": "credentials/record-updated",
+  "label": "settings 重启后"
+ },
+ {
+  "op": "done"
+ }
+]

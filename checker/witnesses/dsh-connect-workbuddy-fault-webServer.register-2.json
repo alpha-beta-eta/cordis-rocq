@@ -1,0 +1,123 @@
+{
+  "name": "dsh-connect-workbuddy-fault-webServer.register-2",
+  "tier": 2,
+  "check": "recovery+reload",
+  "compare": [
+    "before",
+    "after"
+  ],
+  "scenario": {
+    "host": [
+      "settings",
+      "webServer",
+      "tools",
+      "systemPrompt",
+      "credentials",
+      "connection",
+      "subprocess",
+      "sandboxPolicy",
+      "layout",
+      "typert",
+      "sessions",
+      "sessionProjections",
+      "jobs",
+      "uiConversation",
+      "sidebarRight",
+      "pluginNavigation",
+      "slots",
+      "settingsScope",
+      "locale",
+      "commands",
+      "theme",
+      "agentPresets",
+      "fileUpload",
+      "fileViewer",
+      "typertGateway",
+      "uiWorkspace",
+      "sidebarRightTabs",
+      "sandbox",
+      "inputTriggers",
+      "desktopPnpm",
+      "betterSidebar",
+      "workspaceRegistry",
+      "workspaceController",
+      "webTerminals",
+      "webStartup",
+      "web",
+      "uiSession",
+      "terminalController",
+      "sessionQuery",
+      "agents",
+      "sessionController",
+      "llm",
+      "sessionProjectionCache",
+      "storageDomain",
+      "sessionPersistence",
+      "attachments",
+      "subagents",
+      "agentDefaultModel",
+      "fileReferences",
+      "skills"
+    ],
+    "actions": [
+      {
+        "op": "snap",
+        "label": "before"
+      },
+      {
+        "op": "fault",
+        "site": "webServer.register",
+        "nth": 2,
+        "who": "p"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-connect-workbuddy",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "loaded"
+      },
+      {
+        "op": "dispose",
+        "id": "p"
+      },
+      {
+        "op": "snap",
+        "label": "after"
+      },
+      {
+        "op": "install",
+        "plugin": "dsh-connect-workbuddy",
+        "id": "p2"
+      },
+      {
+        "op": "snap",
+        "label": "reloaded"
+      }
+    ]
+  },
+  "summary": [
+    "+ webServer.routes exact /plugins/dsh-connect-workbuddy/usage (exact) @p",
+    "reload: + webServer.routes exact /plugins/dsh-connect-workbuddy/usage (exact) @p(旧)",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/__save (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/account-credits (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/accounts/refresh (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/benefit/claim (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/checkin (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/cli-live (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/device-profile (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/device-sdk (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/media-models (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/models/refresh (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/oauth (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/pool (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/probe (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/tps (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/transfer (exact) @p",
+    "reload: - webServer.routes exact /plugins/dsh-connect-workbuddy/usage (exact) @p",
+    "reload: + cordis.fibers p/dsh-connect-workbuddy#6 (FAILED: duplicate webServer.routes \"exact /plugins/dsh-connect-workbuddy/usage\") @p",
+    "reload: - cordis.fibers p/dsh-connect-workbuddy#6 (ACTIVE) @p"
+  ]
+}

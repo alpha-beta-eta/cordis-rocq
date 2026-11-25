@@ -1,0 +1,8 @@
+[
+  { "op": "settle" },
+  { "op": "wait", "ms": 5000 },
+  { "op": "services", "name": "dshRemote", "label": "落定后" },
+  { "op": "fibers", "id": "ds-harness-remote", "label": "落定后" },
+  { "op": "fibers", "id": "dsh-remote", "label": "落定后" },
+  { "op": "done" }
+]

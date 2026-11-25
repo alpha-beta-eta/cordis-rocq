@@ -1,0 +1,4 @@
+# cordis-check 的驱动插件: 只在设置了 CHECK_REAL_SCENARIO 时做事.
+- insert:
+    - id: cordis-check-driver
+      name: cordis-check-driver

@@ -1,0 +1,144 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "provider",
+  "name": "webServer"
+ },
+ {
+  "op": "provider",
+  "name": "connection"
+ },
+ {
+  "op": "route",
+  "path": "/token-diet",
+  "label": "装上后"
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/token-diet",
+  "label": "webServer 停用时"
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "webServer 停用时"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "route",
+  "path": "/token-diet",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "disable",
+  "id": "token-diet"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "token-diet"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "webServer 缺席时启用"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "route",
+  "path": "/token-diet",
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "disable",
+  "id": "token-diet"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "token-diet"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "route",
+  "path": "/token-diet",
+  "label": "插件重启后"
+ },
+ {
+  "op": "fibers",
+  "id": "token-diet",
+  "label": "插件重启后"
+ },
+ {
+  "op": "done"
+ }
+]

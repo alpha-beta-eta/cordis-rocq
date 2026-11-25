@@ -1,0 +1,99 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "im-qqbot",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "im-qqbot"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "停用后"
+ },
+ {
+  "op": "squat",
+  "path": "/qqbot/im-qqbot/bind/refresh"
+ },
+ {
+  "op": "enable",
+  "id": "im-qqbot"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "im-qqbot",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "im-qqbot"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "im-qqbot",
+  "label": "再停用后"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "再停用后"
+ },
+ {
+  "op": "get",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquat",
+  "path": "/qqbot/im-qqbot/bind/refresh"
+ },
+ {
+  "op": "enable",
+  "id": "im-qqbot"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "im-qqbot",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/qqbot/im-qqbot/bind/refresh",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "done"
+ }
+]

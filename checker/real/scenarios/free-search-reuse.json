@@ -1,0 +1,13 @@
+[
+  { "op": "settle" },
+  { "op": "disable", "id": "web-search-free" },
+  { "op": "settle" },
+  { "op": "squat", "path": "/api/dsh-free-search-settings/mutate" },
+  { "op": "enable", "id": "web-search-free" },
+  { "op": "settle" },
+  { "op": "fibers", "id": "web-search-free", "label": "占位时启用" },
+  { "op": "route", "path": "/api/dsh-free-search-settings/describe", "label": "占位时启用" },
+  { "op": "route", "path": "/api/dsh-free-search-settings/mutate", "label": "占位时启用" },
+  { "op": "get", "path": "/api/dsh-free-search-settings/mutate", "label": "占位时启用" },
+  { "op": "done" }
+]

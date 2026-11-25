@@ -1,0 +1,429 @@
+{
+ "source": "driver graph step on @deepseek-ai/dsh@0.2.2-rc.5 (checker/real/scenarios/graph.json)",
+ "entries": {
+  "agentDefaultModel": "agent-default-model",
+  "agentLoop": "agent-loop",
+  "agentPresets": "agent-preset-registry",
+  "agentTeams": "agent-team",
+  "agents": "agent",
+  "approval": "approval",
+  "attachments": "attachment-local",
+  "authorization": "authorization",
+  "clientModules": "modules",
+  "commands": "commands",
+  "compaction": "agent-preset-registry",
+  "configEditor": "config-editor",
+  "connection": "connection",
+  "cordisInspect": "cordis-host-runner",
+  "credentials": "credentials",
+  "credentialsController": "settings-controller",
+  "deepseekAccount": "deepseek-account",
+  "deepseekLlmApiExtensions": "deepseek-llm-api-extensions",
+  "directoryPicker": "4c6a58bf",
+  "directoryPickerController": "workspace-controller",
+  "dynamicCordisRunner": "cordis-host-runner",
+  "fileReferences": "file-reference-local",
+  "fileUploads": "file-upload",
+  "fs": "fs-sandbox",
+  "goals": "goal",
+  "hmr": "hmr",
+  "jobController": "job-controller",
+  "jobs": "jobs",
+  "llm": "llm",
+  "mcpManager": "mcp-manager",
+  "mcpResources": "mcp-resources",
+  "messageFeedback": "message-feedback",
+  "officeKit": "office-kit",
+  "otel": "otel",
+  "permissionPresets": "permission",
+  "planMode": "agent-preset-registry",
+  "pluginInventory": "plugin-inventory",
+  "pluginManager": "plugin-manager",
+  "pluginRegistryProbe": "ui-plugin-manager",
+  "ptcRuntime": "ptc-runtime",
+  "remoteAccess": "remote-access",
+  "sandbox": "sandbox",
+  "sandboxPolicy": "sandbox-policy",
+  "schedule": "schedule",
+  "sessionController": "session-controller",
+  "sessionFeedback": "command-feedback",
+  "sessionFileReferences": "session-controller",
+  "sessionLogDeepSeek": "session-log-deepseek",
+  "sessionPersistence": "session-persistence-jsonl",
+  "sessionProjectionCache": "session-projection-cache",
+  "sessionProjections": "session-projection",
+  "sessionQuery": "session-query-sqlite",
+  "sessionReferenceResolver": "session-reference",
+  "sessionSkillCatalog": "session-controller",
+  "sessionTelemetry": "session-telemetry-otel",
+  "sessionTitle": "session-title",
+  "sessionToolResults": "ui-trajectory",
+  "sessions": "session",
+  "settings": "settings",
+  "settingsController": "settings-controller",
+  "shell": "bash-sandbox",
+  "shellEnv": "shell-env",
+  "skills": "skill",
+  "spillStore": "spill-local",
+  "storage": "storage",
+  "storage.backend.json": "storage-json",
+  "storageDomain": "storage-domain",
+  "subagentModelSelection": "subagent-model-selection-settings",
+  "subagents": "subagent",
+  "subprocess": "subprocess",
+  "systemPrompt": "system-prompt",
+  "terminalController": "terminal-controller",
+  "terminals": "agent-preset-registry",
+  "timer": "timer",
+  "tokenMeter": "token-meter",
+  "toolResultPruner": "agent-preset-registry",
+  "tools": "tools",
+  "typert": "typert",
+  "typertGateway": "typert-gateway",
+  "userQuestions": "user-questions",
+  "web": "web",
+  "webApp": "web-runtime",
+  "webServer": "webserver",
+  "webStartup": "web-startup",
+  "workflowEngine": "agent-preset-registry",
+  "workingDirectory": "working-directory",
+  "workspaceChanges": "workspace-changes",
+  "workspaceController": "workspace-controller",
+  "workspaceFiles": "workspace-files",
+  "workspaceRegistry": "workspace"
+ },
+ "deps": {
+  "agentDefaultModel": [],
+  "agentLoop": [
+   "agents",
+   "llm",
+   "sessionProjections",
+   "sessions",
+   "systemPrompt",
+   "tools"
+  ],
+  "agentPresets": [
+   "agents",
+   "sessionProjections"
+  ],
+  "agentTeams": [
+   "agents",
+   "sessionPersistence",
+   "sessionProjections",
+   "sessions",
+   "subagents"
+  ],
+  "agents": [
+   "sessionProjections"
+  ],
+  "appExit": [],
+  "appReady": [],
+  "approval": [
+   "sessionProjections"
+  ],
+  "attachments": [],
+  "authorization": [
+   "credentials"
+  ],
+  "clientModules": [],
+  "cmdlineArgs": [],
+  "commands": [],
+  "compaction": [
+   "agents",
+   "llm",
+   "sessionProjections",
+   "sessions",
+   "tokenMeter"
+  ],
+  "configEditor": [
+   "profileContext"
+  ],
+  "connection": [
+   "credentials",
+   "webStartup"
+  ],
+  "cordisInspect": [
+   "tools"
+  ],
+  "credentials": [],
+  "credentialsController": [],
+  "deepseekAccount": [
+   "authorization",
+   "credentials"
+  ],
+  "deepseekLlmApiExtensions": [],
+  "directoryPicker": [],
+  "directoryPickerController": [
+   "directoryPicker",
+   "remoteAccess",
+   "typert",
+   "workspaceRegistry"
+  ],
+  "dshHomePath": [],
+  "dynamicCordisRunner": [
+   "tools"
+  ],
+  "fileReferences": [
+   "agents",
+   "workingDirectory"
+  ],
+  "fileUploads": [
+   "agents",
+   "attachments",
+   "commands",
+   "connection"
+  ],
+  "fs": [
+   "sandboxPolicy"
+  ],
+  "goals": [
+   "agents",
+   "sessionProjections"
+  ],
+  "hmr": [
+   "timer"
+  ],
+  "jobController": [
+   "jobs",
+   "typert"
+  ],
+  "jobs": [],
+  "launchEnvironment": [],
+  "llm": [],
+  "loader": [],
+  "mcpManager": [
+   "credentials",
+   "tools"
+  ],
+  "mcpResources": [
+   "tools"
+  ],
+  "messageFeedback": [
+   "sessionPersistence",
+   "sessions"
+  ],
+  "officeKit": [],
+  "otel": [],
+  "permissionPresets": [
+   "agents",
+   "approval",
+   "sessionProjections",
+   "sessions",
+   "shell"
+  ],
+  "planMode": [
+   "agents",
+   "sessionProjections",
+   "systemPrompt",
+   "tools"
+  ],
+  "pluginInventory": [],
+  "pluginManager": [
+   "profileContext"
+  ],
+  "pluginPackages": [],
+  "pluginRegistryProbe": [],
+  "profileContext": [],
+  "ptcRuntime": [
+   "fs",
+   "sandbox",
+   "sandboxPolicy",
+   "subprocess"
+  ],
+  "remoteAccess": [],
+  "sandbox": [],
+  "sandboxPolicy": [
+   "sessionProjections"
+  ],
+  "schedule": [
+   "agents",
+   "sessionPersistence",
+   "sessions",
+   "storageDomain"
+  ],
+  "sessionController": [
+   "agentDefaultModel",
+   "agents",
+   "attachments",
+   "fileUploads",
+   "fs",
+   "llm",
+   "remoteAccess",
+   "sessionProjections",
+   "sessionQuery",
+   "sessions",
+   "typert",
+   "typertGateway",
+   "workspaceRegistry"
+  ],
+  "sessionFeedback": [
+   "commands",
+   "sessions"
+  ],
+  "sessionFileReferences": [
+   "agentDefaultModel",
+   "agents",
+   "attachments",
+   "fileReferences",
+   "fileUploads",
+   "fs",
+   "llm",
+   "remoteAccess",
+   "sessionProjections",
+   "sessionQuery",
+   "sessions",
+   "typert",
+   "typertGateway",
+   "workspaceRegistry"
+  ],
+  "sessionLogDeepSeek": [
+   "deepseekLlmApiExtensions",
+   "sessions"
+  ],
+  "sessionPersistence": [],
+  "sessionProjectionCache": [
+   "sessionProjections",
+   "sessions",
+   "storageDomain"
+  ],
+  "sessionProjections": [],
+  "sessionQuery": [
+   "sessions"
+  ],
+  "sessionReferenceResolver": [
+   "sessionQuery"
+  ],
+  "sessionSkillCatalog": [
+   "agentDefaultModel",
+   "agents",
+   "attachments",
+   "fileUploads",
+   "fs",
+   "llm",
+   "remoteAccess",
+   "sessionProjections",
+   "sessionQuery",
+   "sessions",
+   "typert",
+   "typertGateway",
+   "workingDirectory",
+   "workspaceRegistry"
+  ],
+  "sessionTelemetry": [
+   "otel",
+   "sessions"
+  ],
+  "sessionTitle": [
+   "agents",
+   "sessionProjections",
+   "sessions"
+  ],
+  "sessionToolResults": [
+   "sessions",
+   "typert"
+  ],
+  "sessions": [],
+  "settings": [
+   "configEditor",
+   "profileContext"
+  ],
+  "settingsController": [],
+  "shell": [
+   "sandbox",
+   "sandboxPolicy",
+   "subprocess"
+  ],
+  "shellEnv": [],
+  "skills": [],
+  "spillStore": [],
+  "storage": [],
+  "storage.backend.json": [
+   "storage"
+  ],
+  "storageDomain": [
+   "storage",
+   "storage.backend.json"
+  ],
+  "subagentModelSelection": [
+   "sessionProjections",
+   "sessions"
+  ],
+  "subagents": [
+   "sessionProjections",
+   "workingDirectory"
+  ],
+  "subprocess": [],
+  "systemPrompt": [],
+  "terminalController": [
+   "sandboxPolicy",
+   "subprocess",
+   "typert",
+   "workingDirectory"
+  ],
+  "terminals": [
+   "agents",
+   "sessionProjections"
+  ],
+  "timer": [],
+  "tokenMeter": [
+   "sessionProjections"
+  ],
+  "toolResultPruner": [
+   "agents",
+   "sessionProjections",
+   "tokenMeter"
+  ],
+  "tools": [
+   "systemPrompt"
+  ],
+  "typert": [],
+  "typertGateway": [
+   "remoteAccess",
+   "typert"
+  ],
+  "userQuestions": [],
+  "web": [],
+  "webApp": [
+   "webServer",
+   "webStartup"
+  ],
+  "webServer": [
+   "webStartup"
+  ],
+  "webStartup": [
+   "cmdlineArgs"
+  ],
+  "workflowEngine": [
+   "agents",
+   "ptcRuntime",
+   "sandboxPolicy",
+   "sessionProjections",
+   "subagents",
+   "workingDirectory"
+  ],
+  "workingDirectory": [
+   "fs",
+   "sessionProjections",
+   "systemPrompt"
+  ],
+  "workspaceChanges": [
+   "fs",
+   "subprocess"
+  ],
+  "workspaceController": [
+   "remoteAccess",
+   "typert",
+   "workspaceRegistry"
+  ],
+  "workspaceFiles": [
+   "fs",
+   "sandboxPolicy",
+   "sessions",
+   "typert"
+  ],
+  "workspaceRegistry": [
+   "sessionPersistence",
+   "storageDomain"
+  ]
+ }
+}

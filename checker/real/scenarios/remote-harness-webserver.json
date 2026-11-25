@@ -1,0 +1,255 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "provider",
+  "name": "webServer"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/ds-harness-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "tools",
+  "names": [
+   "remote_create_session",
+   "remote_download_file",
+   "remote_get_operation",
+   "remote_interrupt_session",
+   "remote_list_hosts",
+   "remote_list_presets",
+   "remote_list_sessions",
+   "remote_list_workspaces",
+   "remote_read_session",
+   "remote_select_preset",
+   "remote_send_message",
+   "remote_upload_file",
+   "remote_wait_sessions"
+  ],
+  "label": "装上后"
+ },
+ {
+  "op": "services",
+  "name": "dshRemote",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/ds-harness-remote",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "tools",
+  "names": [
+   "remote_create_session",
+   "remote_download_file",
+   "remote_get_operation",
+   "remote_interrupt_session",
+   "remote_list_hosts",
+   "remote_list_presets",
+   "remote_list_sessions",
+   "remote_list_workspaces",
+   "remote_read_session",
+   "remote_select_preset",
+   "remote_send_message",
+   "remote_upload_file",
+   "remote_wait_sessions"
+  ],
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "services",
+  "name": "dshRemote",
+  "label": "webServer 重启后"
+ },
+ {
+  "op": "disable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "webServer 缺席时启用"
+ },
+ {
+  "op": "routes",
+  "prefix": "/ds-harness-remote",
+  "label": "webServer 缺席时启用"
+ },
+ {
+  "op": "tools",
+  "names": [
+   "remote_create_session",
+   "remote_download_file",
+   "remote_get_operation",
+   "remote_interrupt_session",
+   "remote_list_hosts",
+   "remote_list_presets",
+   "remote_list_sessions",
+   "remote_list_workspaces",
+   "remote_read_session",
+   "remote_select_preset",
+   "remote_send_message",
+   "remote_upload_file",
+   "remote_wait_sessions"
+  ],
+  "label": "webServer 缺席时启用"
+ },
+ {
+  "op": "services",
+  "name": "dshRemote",
+  "label": "webServer 缺席时启用"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "routes",
+  "prefix": "/ds-harness-remote",
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "tools",
+  "names": [
+   "remote_create_session",
+   "remote_download_file",
+   "remote_get_operation",
+   "remote_interrupt_session",
+   "remote_list_hosts",
+   "remote_list_presets",
+   "remote_list_sessions",
+   "remote_list_workspaces",
+   "remote_read_session",
+   "remote_select_preset",
+   "remote_send_message",
+   "remote_upload_file",
+   "remote_wait_sessions"
+  ],
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "services",
+  "name": "dshRemote",
+  "label": "webServer 晚到"
+ },
+ {
+  "op": "disable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "ds-harness-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 5000
+ },
+ {
+  "op": "fibers",
+  "id": "ds-harness-remote",
+  "label": "插件重启后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/ds-harness-remote",
+  "label": "插件重启后"
+ },
+ {
+  "op": "tools",
+  "names": [
+   "remote_create_session",
+   "remote_download_file",
+   "remote_get_operation",
+   "remote_interrupt_session",
+   "remote_list_hosts",
+   "remote_list_presets",
+   "remote_list_sessions",
+   "remote_list_workspaces",
+   "remote_read_session",
+   "remote_select_preset",
+   "remote_send_message",
+   "remote_upload_file",
+   "remote_wait_sessions"
+  ],
+  "label": "插件重启后"
+ },
+ {
+  "op": "services",
+  "name": "dshRemote",
+  "label": "插件重启后"
+ },
+ {
+  "op": "done"
+ }
+]

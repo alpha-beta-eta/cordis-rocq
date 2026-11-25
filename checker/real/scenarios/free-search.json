@@ -1,0 +1,99 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "web-search-free"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "停用后"
+ },
+ {
+  "op": "squat",
+  "path": "/api/dsh-free-search-settings/mutate"
+ },
+ {
+  "op": "enable",
+  "id": "web-search-free"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "web-search-free"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "再停用后"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "再停用后"
+ },
+ {
+  "op": "get",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "再停用后"
+ },
+ {
+  "op": "unsquat",
+  "path": "/api/dsh-free-search-settings/mutate"
+ },
+ {
+  "op": "enable",
+  "id": "web-search-free"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "web-search-free",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/describe",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "route",
+  "path": "/api/dsh-free-search-settings/mutate",
+  "label": "撤掉占位再启用"
+ },
+ {
+  "op": "done"
+ }
+]
