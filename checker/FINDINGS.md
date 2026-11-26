@@ -266,6 +266,37 @@ route     webStartup 重启后          /api/dsh-free-search-settings/describe �
 
 另外，`pair-ds-harness-remote-dsh-remote` 在 checker 里约五次有一次不复现，级联前后都是这样。原因是 ds-harness-remote 的 `provide` 排在一段文件 I/O 之后 (`activateWhenCarrierReady`)，与另一个插件的装载赛跑。真实宿主上它总是输，见上文。
 
+**级联的覆盖面 (2026-11-26)。** 真实插件有多依赖这种连带重启？做法是：在 checker 里把能装上的 25 个插件各装一次 (默认宿主)，读出每个插件 fiber 上的 inject，再沿 `lib/host-graph.json` 求闭包。这次只用了一个临时探针，没有进仓库：它在 `exec.mjs` 的快照里多记每个 fiber 的 inject 和它在插件内的深度。
+
+插件自己的嵌套普遍，但不深：
+
+- 17 个插件有嵌套的 inject (apply 里再 `ctx.inject`，或开子插件)，例如 dsh-context 18 个、dsh-free-search 14 个、dsh-ops 11 个；
+- 最深 3 层，只有 ds-harness-remote、dsh-ops、dsh-im；
+- 没有嵌套的 8 个：deep-view、dsh-mnemon、dsh-mobile-plugin、dsh-onebot-qq、dsh-pet、dsh-plugin-wallpaper-engine、dsh-session-superagent、dsh-skills-manager。
+
+宿主侧的依赖则让插件被许多它没有声明的服务连带重启。一个服务重启时波及的插件数如下 (直接 inject，或经闭包间接依赖)：
+
+| 重启的服务 | 波及 | 其中只经级联 | 经过的边 |
+|---|---|---|---|
+| `webStartup` | 21 | 20 | `webServer`、`connection` → `webStartup` |
+| `systemPrompt` | 17 | 8 | `tools` → `systemPrompt` |
+| `sessionProjections` | 13 | 9 | `agents` → `sessionProjections` |
+| `credentials` | 12 | 8 | `connection` → `credentials` |
+| `webServer` / `tools` / `connection` | 16 / 15 / 12 | 0 | 没有宿主服务依赖它们 |
+
+systemPrompt 只经级联波及的 8 个是 deep-view、ds-harness-remote、dsh-agent-compare、dsh-connect-workbuddy、dsh-mnemon、dsh-session-superagent、dsh-windows-mcp、dsh-skills-manager，都是因为用了 `tools`。闭包里的 `cmdlineArgs`、`profileContext`、`configEditor` 大概只在启动时提供，上表没有列。dsh-im 与 deep-view 经闭包分别多出 21 个与 22 个隐含依赖，基本是整个 session 子系统。
+
+结论取决于级联的只有 3 个插件：第二轮 (不级联) 与第三轮 (级联) 的见证只在 dsh-image-gen、dshmarket、dsh-free-search 上不同。
+
+- dsh-image-gen：级联**掩盖**了外层 `ctx` 的写法错误，这是唯一一个正确性靠级联兜底的插件，而且是碰巧。
+- dshmarket、dsh-free-search：级联多出 webStartup 这条触发路径，根源与 webServer 重启相同。
+
+其余见证有没有级联都一样，问题都出在插件直接 inject 的服务上。
+
+所以，级联本身不违反任何前提：它只是 O-Dispose 沿依赖传播，满足前提的插件被连带重启多少次都没关系。但它放大了违反前提的代价：复用 ctx、用外层 `ctx` 这类写法，会被比插件作者以为的多得多的服务重启触发。它也会掩盖违反：宿主的依赖图一变 (例如 `tools` 不再依赖 `systemPrompt`)，image-gen 的问题就会出现。审计与 checker 都应该按服务单独重启来判，不能指望级联兜底。
+
+局限：数字来自一次装载，只覆盖走到的分支。dsh-cost-meter 只部分激活，dsh-mnemon 配置校验失败，它们的嵌套 inject 可能少算了。webStartup 等服务在实际使用中多久重启一次，没有数据。
+
 ### 第四、五轮的新见证 (2026-11-25)
 
 驱动新增两个探测：`routes` 按前缀统计路由与升级路由的条数和处理器编号，`tools` 查一组工具是否登记在全局层。
