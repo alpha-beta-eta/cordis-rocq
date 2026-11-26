@@ -1,6 +1,6 @@
 # 贡献键：让登记按构造合流 (设计草案)
 
-2026-11-26。状态：E6a 已形式化 (`theories/Services/Contrib.v`)，其余阶段为草案。
+2026-11-26。状态：E6a、E6b 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`)，其余阶段为草案。
 
 ## 0. 动机
 
@@ -94,14 +94,21 @@ contrib_meet a b  :=  ¬ (a = Read ∧ b 是 Contribute)  ∧  ¬ (b = Read ∧ 
 | `contribute_read_not_commute` | 对 `q` 看得见的名字，`Contribute` 与 `Read` 不可交换。这说明 E6b 的相遇关系必须排除这一对 |
 | `resolve_private_local`、`private_isolated` | 私有名的解析只取决于本标记的贡献：别的标记的贡献怎么变都不影响它 (原列在 `Ext/Hygiene.v` 下，它是服务本身的性质，挪到这里) |
 
-`Services/ContribConf.v`：
+`Services/ContribConf.v` (E6b，已完成，不依赖任何公理)：
 
 | 命题 | 内容 |
 |---|---|
-| `contrib_hyps` | `ConfHyps Contrib contrib_meet` |
-| `contrib_no_fail` | `Contribute` 从不失败，所以撞名不产生失败的 fiber，合流定理的 `NoFailed` 前提不因撞名而落空 |
-| `contrib_confluence` | 两次调度静止且无失败时，每个贡献键上的 `resolve` 逐名字相等。由 `listeners_confluence` 的同一路线加 `resolve_perm` 得到 |
-| `contrib_recovery` | 卸载后的 `resolve` 等于略去该 fiber 全部贡献的影子的 `resolve`。由核心的恢复定理加 `resolve_perm` 得到 |
+| `contrib_hyps` | `ConfHyps Contrib contrib_meet`：合流层的服务假设全部成立。`contrib_meet` 允许任意两次贡献、任意两次读取，只排除贡献与读取相遇 |
+| `covers_no_read` | 组件的启动程序在贡献键上从不 `Read`，`Covers contrib_meet` 就成立，不论贡献什么名字 |
+| `contrib_confluence` | 汇总定理的合流层读到 `resolve` 上：两次编排执行静止且无失败时，两边都绑定的键上，每个名字解析结果相同 |
+| `contrib_static` | 同上，与静态组装比较 |
+| `contrib_revertible` | 恢复层的服务假设对 `contrib_rev` 成立：`contrib_meet` 再要求两次贡献的条目不同 |
+| `covers_rev_no_read` | 不读，且没有两个 fiber 会贡献同一个条目时，`Covers contrib_rev` 成立 |
+| `contrib_recovery` | 汇总定理的恢复层读到 `resolve` 上：fiber 卸载后，每个名字的解析结果与略去它全部操作的影子执行相同 |
+
+原计划的 `contrib_no_fail` 不单独陈述：`contribute_total` (E6a) 已经说明 `Contribute` 从不失败，撞名因此不会让 fiber 失败，合流定理的 `NoFailed` 前提不会因撞名而落空。
+
+**恢复层为什么要求条目不同。** 汇总定理的恢复层要求逆在**任意**状态上都与对方的操作独立 (`RevertIndep`)，而不只是在操作发生之后的状态上 (合流层的 `RevAfter`)。从一个不含 `e` 的状态里删一个 `e` 什么也不做，再补上一个 `e` 就多出来了，所以两次相同的贡献在这样的状态上不独立。这些状态在真实执行中到不了，但定理的陈述覆盖它们。E6d 的标记让不同组件的条目天然不同；剩下的情形是同一个组件的两个副本 (不提供键、可以有多个 fiber 的组件) 贡献同一条目，需要单独排除，或者把恢复定理的前提也弱化到"操作发生之后"。后者是对核心的改进，留作未决问题。
 
 `Services/ContribOrder.v`：
 
@@ -162,7 +169,7 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 | 阶段 | 内容 |
 |---|---|
 | E6a | `Services/Contrib.v`：服务定义、良态、`resolve_perm`、私有名隔离。**已完成** |
-| E6b | `Services/ContribConf.v`：`contrib_hyps`、`contrib_no_fail`、合流与恢复的推论 |
+| E6b | `Services/ContribConf.v`：`contrib_hyps`、`contrib_revertible`、合流与恢复的推论。**已完成** |
 | E6c | `Services/ContribOrder.v`：`chain_perm` 与中间件链的合流 |
 | E6d | `Ext/Hygiene.v`：标记改写、`hyg_covers`、私有名隔离、汇总 |
 | E6e | checker 实验：宿主桩加一个"贡献模式" (`webServer`、`settings.configure` 改为 owned；撞名记为冲突值；中间件按优先级排序)，插件代码不动，重跑全部场景 |
@@ -182,3 +189,4 @@ E6e 的预期 (都是待检验的假设)：
 3. **`chain_perm` 要求全序。** 两个条目在 (优先级, 标记, 值的键) 上完全相同时，它们是同一个组件的两次相同贡献，排序结果仍唯一。但"值的键"在宿主里要能比较，处理器函数本身不可比较，需要用登记时给的名字。
 4. **与 `Registry` 的关系。** `Registry` 的"先到者生效"不是置换不变的，所以 `Registry` 不是贡献键的特例。两者会长期并存：现有的 owned 登记 (`tools.register`) 满足 `Registry` 的前提即可，贡献键给想要"按构造合流"的宿主一个更强的选项。
 5. **键层面的推广。** 若把 `PProvide` 的冲突也改成"候选都挂着，按优先级确定一个"，`dshRemote` 一类问题也能按构造合流。这需要改演算的绑定规则，与本文分开做。
+6. **恢复层的前提能否弱化到"操作发生之后"。** 合流层用的 `RevAfter` 只在操作已经发生的状态上要求独立；恢复层的 `RevertIndep` 要求在任意状态上独立，于是贡献键要排除两个 fiber 贡献同一条目 (见 E6b)。若核心的恢复定理只需要 `RevAfter` 那样的前提，这个限制就可以去掉，`Listeners` 也能得到恢复层的推论。这是对核心的改动，影响面需要单独评估。
