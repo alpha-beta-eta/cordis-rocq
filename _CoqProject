@@ -27,6 +27,7 @@ theories/Compose.v
 theories/Bridge.v
 theories/Services/RegistryConf.v
 theories/Services/Listeners.v
+theories/Services/Contrib.v
 theories/Examples/Composed.v
 theories/Derived.v
 theories/Summary.v
