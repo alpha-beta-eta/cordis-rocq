@@ -41,6 +41,11 @@ sh run.sh proc-im scenarios/process-im.json @xmanrui/dsh-im@5.10.0
 # dsh-ops 的故障注入见证: 占住它第 2 次要登记的提示段名, 让真实的 systemPrompt.section 因重名抛错
 sh run.sh ops-section scenarios/ops-section.json dsh-ops@0.5.5
 
+# E6f (../../docs/CONTRIB.md): 贡献键宿主. 硬链接复制一份宿主, 只改 webserver 一个文件 (owned 登记, 撞名按多重集);
+# 之后任一场景加 DSH_HOST=dsh-host-contrib 即在它上面跑, 名字后加 -contrib 以免覆盖基线的 /tmp 目录
+node contrib-host.mjs ~/.cache/cordis-check
+DSH_HOST=dsh-host-contrib sh run.sh whale-contrib scenarios/whale.json dsh-whale-widget@0.4.2
+
 # 服务依赖图: 读出每个服务的提供者及其 fiber 链上的 inject, 生成 checker 的 lib/host-graph.json
 sh run.sh graph scenarios/graph.json dsh-image-gen@0.11.4 dshmarket@1.80.0 dsh-free-search@0.9.82
 node make-graph.mjs /tmp/cordis-real-graph/out.json 0.2.2-rc.5 > ../lib/host-graph.json

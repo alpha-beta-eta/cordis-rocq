@@ -1,6 +1,6 @@
 # 贡献键：让登记按构造合流 (设计草案)
 
-2026-11-26。状态：E6a–E6d 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`，`theories/Ext/Hygiene.v`)；E6e 的 checker 实验已完成；E6f (真实宿主) 尚未做。
+2026-11-26。状态：E6a–E6d 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`，`theories/Ext/Hygiene.v`)；E6e (checker) 与 E6f (真实宿主) 两个实验都已完成。
 
 ## 0. 动机
 
@@ -185,7 +185,7 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 | E6c | `Services/ContribOrder.v`：`chain_perm`、冲突各方、中间件链的合流。**已完成** |
 | E6d | `Ext/Hygiene.v`：标记改写、读自己的私有名、覆盖条件、汇总。**已完成** |
 | E6e | checker 实验：宿主桩加一个"贡献模式"，插件代码不动，重跑全部场景。**已完成**，结果见下 |
-| E6f | 真实宿主：在 dsh 的 `webServer` 上实现 H1–H3，重跑 `real/scenarios/` 下的 A 类与 free-search 场景 |
+| E6f | 真实宿主：在 dsh 的 `webServer` 上实现 H1、H2，重跑 `real/scenarios/` 下的 A 类与 free-search 场景。**已完成**，结果见下 |
 
 ### E6e 的结果 (2026-11-26)
 
@@ -219,6 +219,39 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 CHECK_CONTRIB=1 CHECK_OUT=.out/contrib sh check.sh check --all
 CHECK_CONTRIB=1 CHECK_OUT=.out/contrib sh check.sh pair ds-harness-remote dsh-remote
 CHECK_CONTRIB=1 CHECK_OUT=.out/contrib CHECK_JOBS=4 sh check.sh check dsh-mobile-plugin
+```
+
+### E6f 的结果 (2026-11-26)
+
+**做法。** 在真实的 dsh 0.2.2-rc.5 上实现 H1、H2。`checker/real/contrib-host.mjs` 把基线宿主硬链接复制一份 (`dsh-host-contrib`)，只改其中 `@deepseek-ai/dsh-host-webserver/lib/index.js` 一个文件：
+
+- H1：`register`、`registerUpgrade`、`tapIndex` 改为经调用者的 `ctx.effect` 登记 (生成器效应，逐条收集)，返回值仍可调用；
+- H2：同一 `(kind, path)` 的登记按多重集保存。恰好一个时照常应答；多于一个时这条路径回 409 (升级路由断开连接)，谁都不生效，与登记次序无关。
+
+`registerFallback` 不改，H3 (私有名加前缀) 没做，因为这些场景里的路径都是公开的。基线宿主没有动 (改的是新文件，另一个 inode)，基线场景照旧可跑。插件与驱动都不改，场景文件也不改：`DSH_HOST=dsh-host-contrib sh run.sh ...`。
+
+**结果。** 8 个场景，与 [../checker/FINDINGS.md](../checker/FINDINGS.md) 里基线宿主上的记录对比：
+
+| 场景 | 基线宿主 | 贡献键宿主 |
+|---|---|---|
+| whale、dshmarket、dsh-remote、connect-workbuddy、qqbot：先占住第 2 条路由再启用，停用，撤掉占位再启用 | 内层 fiber FAILED；停用后第 1 条路由仍由旧处理器应答 (401 或 200)；撤掉占位后撞在自己留下的路由上，装不回去 | 占位时插件全部 ACTIVE；停用后路由未登记，HTTP 404；撤掉占位再启用正常，换成新处理器 |
+| windows-mcp：正常停用再启用 | 停用后 `/state` 仍回 200；再启用后新实例 6 次登记全部撞名 | 停用后未登记，404；再启用后是新处理器，回 200 |
+| dsh-mobile-plugin：正常停用再启用 | 停用后 286 条路由与 2 条升级路由仍挂着旧分派器；再启用后新分派器全部撞名 | 停用后路由与升级路由都是 0 条；再启用后 288 条路由、3 条升级路由全部是新处理器 |
+| free-search：占住 `/mutate` 再启用 | 全部 ACTIVE，`/mutate` 由占位者应答 (HTTP 418)，插件以为是自己的 | 全部 ACTIVE，`/mutate` 回 409 `route conflict`：冲突显式化，谁都不生效 |
+| webserver 连续重启三次 (对照) | dshmarket 的 fiber 4、5、6、7 地累积 | 同样累积：这是插件侧的 C2 问题，贡献键不管 |
+
+**解读。**
+
+- **E6e 在 checker 里的结论，在真实宿主上原样成立。** A 类的 5 个插件与 A′ 的 2 个插件，泄漏全部消失，"装不回去"也随之消失。宿主改的只有一个文件，删去与新增合计 59 行。
+- **撞名从"静默地让给别人"变成"显式冲突"。** free-search 不再把设置写入接口交给占位者。代价是冲突期间那条路径对双方都不可用，插件也收不到通知 (fiber 仍是 ACTIVE)；宿主应当在诊断或日志里报告冲突，这次没有做。
+- **范围之外的照旧。** dshmarket 的重启累积不变，与 §6 的覆盖表一致。
+
+**复现。** 在 WSL 的 `checker/real/` 下运行：
+
+```sh
+node contrib-host.mjs ~/.cache/cordis-check          # 只需一次: 造 dsh-host-contrib
+DSH_HOST=dsh-host-contrib sh run.sh whale-contrib scenarios/whale.json dsh-whale-widget@0.4.2
+# 其余场景同 README, 名字后加 -contrib 以免覆盖基线的 /tmp 目录
 ```
 
 ## 8. 未决问题

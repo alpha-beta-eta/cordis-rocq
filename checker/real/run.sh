@@ -12,7 +12,7 @@ export PATH=$TOOLS/bin:$TOOLS/node-v24.22.3-linux-x64/bin:$PATH
 ROOT=/tmp/cordis-real-$NAME
 rm -rf "$ROOT"; mkdir -p "$ROOT/home" "$ROOT/dsh"
 export DSH_HOME=$ROOT/dsh HOME=$ROOT/home XDG_DATA_HOME=$TOOLS/xdg   # pnpm 的包存储跨运行共用
-cd "$TOOLS/dsh-host"
+cd "$TOOLS/${DSH_HOST:-dsh-host}"                   # DSH_HOST=dsh-host-contrib: E6f 的贡献键宿主 (见 contrib-host.mjs)
 npx dsh web --help > /dev/null                      # 生成 profile
 for p in "$@"; do npx dsh plugin --profile web add --ignore-scripts "$p" > "$ROOT/add.log" 2>&1 || { cat "$ROOT/add.log"; exit 1; }; done
 cp -r "$HERE/driver" "$ROOT/driver"

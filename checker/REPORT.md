@@ -251,8 +251,10 @@ checker 复现了审计的主要判定，补出了审计漏记的同类问题，
 
 **给宿主与 Cordis。** 两个改动能从源头消除 A 类与 A′ 类：
 
-- `webServer.register` 等登记接口改为经调用者的 `ctx.effect` 登记 (与 `tools.register` 一致)，卸载时自动撤销。
-- 一个效应体中途抛错时，已经进入它的登记也应被撤销。这正是演算里 L-Fail 的语义。
+- `webServer.register` 等登记接口改为经调用者的 `ctx.effect` 登记 (与 `tools.register` 一致)，卸载时自动撤销。效应体中途抛错时，Cordis 本来就会撤销它已经收到的 disposer，这正是演算里 L-Fail 的语义；owned 登记让 disposer 一产生就交给 Cordis，这一条也就自动成立。
+- 同名登记不再抛错，按多重集保存，冲突时谁都不生效 (而不是先到者生效)。
+
+这两条在 checker 与真实宿主上都验证过 ([../docs/CONTRIB.md](../docs/CONTRIB.md) 的 E6e、E6f)：插件代码不动，checker 的 50 个见证降到 39 个，路由泄漏全部消失，其余类别原样保留；真实宿主上只改 webserver 一个文件，A 类 5 个插件、windows-mcp 与 dsh-mobile-plugin 的泄漏都不再出现，free-search 的撞名变成显式的 409。
 
 服务名冲突应在插入时拒绝，而不是由插件吞错后继续运行 (`dshRemote` 一例)。fiber 因依赖重启而重跑 apply 时，宿主可以给一个新的 ctx，或者在文档里写明会复用 ctx。
 
