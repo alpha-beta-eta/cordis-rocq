@@ -48,3 +48,4 @@ theories/Ext/IntersectLive.v
 theories/Ext/ExtOrdering.v
 theories/Ext/Examples.v
 theories/Ext/ExtSummary.v
+theories/Ext/Hygiene.v

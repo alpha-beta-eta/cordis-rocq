@@ -1,6 +1,6 @@
 # 贡献键：让登记按构造合流 (设计草案)
 
-2026-11-26。状态：E6a–E6c 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`)，其余阶段为草案。
+2026-11-26。状态：E6a–E6d 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`，`theories/Ext/Hygiene.v`)；E6e、E6f 是实验，尚未做。
 
 ## 0. 动机
 
@@ -70,7 +70,7 @@ Res := RAbsent | ROne (t : Tag) (v : V) | RConflict
 
 **不改演算。** 贡献键是 `Service` 的一个实例，与 `Registry`、`Listeners` 并列，放在 `theories/Services/`。多个服务的组合沿用 `Compose.v`。
 
-**标记由宿主填。** 程序里写的是不带标记的 `Contribute (x, v)`；组件表在构造时把它改写成 `Contribute (c, x, v)`，就像 `Ext/Optional.v` 的 `lift` 改写子组件那样。这一层放在 `theories/Ext/Hygiene.v`，只 import 核心与 `Services/Contrib.v`，核心不 import 它。用组件 `c` 而不是 pid 做标记，是因为合流在重命名意义下陈述：两次调度给同一个组件的 pid 不同，但 `c` 相同。
+**标记由宿主填。** 程序里写的是不带标记的 `Contribute (x, v)`；组件表在构造时把它改写成 `Contribute (c, x, v)`，就像 `Ext/Optional.v` 的 `lift` 改写子组件那样。这一层放在 `theories/Ext/Hygiene.v`，只 import 核心与 `Services/Contrib.v`、`ContribConf.v`，核心不 import 它。用组件 `c` 而不是 pid 做标记，是因为合流在重命名意义下陈述：两次调度给同一个组件的 pid 不同，但 `c` 相同。
 
 **插件剩下的义务：启动期不读别人的贡献。** `Read` 与别的 fiber 的 `Contribute` 不可交换：读到的表取决于对方是否已经贡献。这与审计里的 C5 (启动期不读有序分发的结果) 同源，也是 free-search"复用"别人路由的形状。所以相遇关系取
 
@@ -122,13 +122,20 @@ contrib_meet a b  :=  ¬ (a = Read ∧ b 是 Contribute)  ∧  ¬ (b = Read ∧ 
 
 链只决定谁先运行，不让两个互不交换的处理器变得一致；它让结果只取决于贡献的集合，这正是合流所要求的。
 
-`Ext/Hygiene.v`：
+`Ext/Hygiene.v` (E6d，已完成，不依赖任何公理)。组件表 `hprog` 把组件 `c` 启动程序里的每个贡献改成带标记 `c`，每次读取改成以 `c` 的身份读 (`retag`)；依赖、提供、子组件、处理器都不变。
 
 | 命题 | 内容 |
 |---|---|
-| `hyg_covers` | 启动程序在贡献键上只做 (改写后的) `Contribute` 时，`Covers contrib_meet` 成立 |
-| `public_conflict_det` | 公开名的 `Conflict ts` 中，`ts` 恰好是贡献了这个名字的组件集合 (按需加上优先级)，与次序无关 |
-| `hyg_summary` | 把以上并入汇总定理的形状：第 2、3 层对贡献键不再需要 R3 |
+| `opat_retag`、`hprog_tagged` | 改写后组件 `c` 的每个操作都带标记 `c`，且来自原程序的某个操作 |
+| `hyg_hyps` | 合流层的服务假设对 `hyg_meet` 成立。它比 E6b 的 `contrib_meet` 宽：允许读取与**别的标记**下的贡献相遇，只要读的是私有名 |
+| `hyg_revertible` | 恢复层的服务假设对 `hyg_rev` 成立 (`hyg_meet` 再要求两次贡献的条目不同) |
+| `hyg_covers` | 只看程序形状就能得到覆盖条件：启动期只读私有名 (`ReadsOwn`)，且读取的组件提供某个键、因而同一时刻只有一个 fiber |
+| `hyg_covers_rev` | 再加上贡献的组件同一时刻只有一个 fiber (`ContribSingle`)，恢复层的覆盖条件也成立：不同组件的条目标记不同，自然不同 |
+| `hyg_confluence`、`hyg_static`、`hyg_recovery` | 汇总定理对改写后的组件表读到 `resolve` 上 |
+
+这一层解决了原来的未决问题 1：组件在启动期读自己的私有名是允许的，它与别的组件的贡献可交换 (`read_other_cons`)。代价是读取的组件要单实例：同一个组件的两个 fiber 标记相同，彼此的贡献会出现在对方的私有名里。
+
+原计划的 `public_conflict_det` 由 E6c 的 `parties_perm` 覆盖：冲突各方 (带标记，也就是组件) 由多重集决定。原计划的 `hyg_summary` 即上表最后一行。
 
 ## 5. 宿主侧的对应
 
@@ -176,7 +183,7 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 | E6a | `Services/Contrib.v`：服务定义、良态、`resolve_perm`、私有名隔离。**已完成** |
 | E6b | `Services/ContribConf.v`：`contrib_hyps`、`contrib_revertible`、合流与恢复的推论。**已完成** |
 | E6c | `Services/ContribOrder.v`：`chain_perm`、冲突各方、中间件链的合流。**已完成** |
-| E6d | `Ext/Hygiene.v`：标记改写、`hyg_covers`、私有名隔离、汇总 |
+| E6d | `Ext/Hygiene.v`：标记改写、读自己的私有名、覆盖条件、汇总。**已完成** |
 | E6e | checker 实验：宿主桩加一个"贡献模式" (`webServer`、`settings.configure` 改为 owned；撞名记为冲突值；中间件按优先级排序)，插件代码不动，重跑全部场景 |
 | E6f | 真实宿主：在 dsh 的 `webServer` 上实现 H1–H3，重跑 `real/scenarios/` 下的 A 类与 free-search 场景 |
 
@@ -189,7 +196,7 @@ E6e 的预期 (都是待检验的假设)：
 
 ## 8. 未决问题
 
-1. **启动期合法地读自己的贡献。** 插件读自己贡献过的名字是无害的 (同一 fiber 的操作不互相比较)，但 `contrib_meet` 按操作而不是按标记划分，会把"读自己"和"读别人"一起排除。可以把 `Read` 细化为 `ReadOwn` 与 `ReadAll`，只排除后者。
+1. ~~**启动期合法地读自己的贡献。**~~ 已由 E6d 解决：标记之后，读自己的私有名与别的组件的贡献可交换 (`hyg_meet`)，前提是读取的组件同一时刻只有一个 fiber。
 2. **公开名的冲突策略。** "都不生效"最安全，但会让两个本来能各自工作的插件同时失效；"唯一最高优先级"需要宿主或用户给出优先级。这是产品决定，模型两种都支持。
 3. **`chain_perm` 要求全序。** 两个条目在 (优先级, 标记, 值的键) 上完全相同时，它们是同一个组件的两次相同贡献，排序结果仍唯一。但"值的键"在宿主里要能比较，处理器函数本身不可比较，需要用登记时给的名字。
 4. **与 `Registry` 的关系。** `Registry` 的"先到者生效"不是置换不变的，所以 `Registry` 不是贡献键的特例。两者会长期并存：现有的 owned 登记 (`tools.register`) 满足 `Registry` 的前提即可，贡献键给想要"按构造合流"的宿主一个更强的选项。
