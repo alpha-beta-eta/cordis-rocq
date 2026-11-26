@@ -18,7 +18,7 @@ sh check.sh sweep                                  # 全部插件各装上卸载
 sh check.sh replay witnesses/*.json                # 重放见证 (全部复现时退出码为 1)
 ```
 
-并行度默认是 CPU 数的一半，可以用 `CHECK_JOBS` 改。转译结果和 dsh 包索引缓存在 `.cache/` 下，删掉即可重建。
+并行度默认是 CPU 数的一半，可以用 `CHECK_JOBS` 改。`CHECK_CONTRIB=1` 打开贡献模式 ([../docs/CONTRIB.md](../docs/CONTRIB.md) 的 E6e)：所有登记都经调用者的 fiber，撞名不抛错而按多重集记下。`CHECK_OUT=<目录>` 把见证与报告写到别处，不碰 `witnesses/` 与 `reports/`。转译结果和 dsh 包索引缓存在 `.cache/` 下，删掉即可重建。
 
 第一轮的报告见 [REPORT.md](REPORT.md)，逐插件的细节见 [FINDINGS.md](FINDINGS.md)。在真实的 dsh 宿主上复现见证的工具在 [real/](real/)。
 

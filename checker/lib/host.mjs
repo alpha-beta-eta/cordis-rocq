@@ -35,14 +35,25 @@ function owned(world, ctx, site, table, key, view) {
   }, site)
 }
 
+// 贡献模式 (CHECK_CONTRIB=1, docs/CONTRIB.md 的 E6e): 宿主满足 H1, 所有登记都经调用者的 fiber (owned);
+// 撞名不抛错, 由 world 按多重集记下 (H2). 用来检验"宿主改成贡献键之后, 哪些见证会消失".
+export const CONTRIB = process.env.CHECK_CONTRIB === '1'
+
 // 只返回裸 disposer.
 function bare(world, ctx, site, table, key, view) {
+  if (CONTRIB) return owned(world, ctx, site, table, key, view)
   const who = world.hit(site, ctx, key)
   return world.insert(table, key, { owner: who, view })
 }
 
 function bareAppend(world, ctx, site, table, view, opts) {
   const who = world.hit(site, ctx, view)
+  if (CONTRIB) {
+    return ctx.effect(function* () {
+      const undo = world.append(table, { owner: who, view }, opts)
+      yield () => undo()
+    }, site)
+  }
   return world.append(table, { owner: who, view }, opts)
 }
 

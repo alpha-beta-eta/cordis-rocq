@@ -1,6 +1,6 @@
 # 贡献键：让登记按构造合流 (设计草案)
 
-2026-11-26。状态：E6a–E6d 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`，`theories/Ext/Hygiene.v`)；E6e、E6f 是实验，尚未做。
+2026-11-26。状态：E6a–E6d 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`，`theories/Ext/Hygiene.v`)；E6e 的 checker 实验已完成；E6f (真实宿主) 尚未做。
 
 ## 0. 动机
 
@@ -184,15 +184,42 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 | E6b | `Services/ContribConf.v`：`contrib_hyps`、`contrib_revertible`、合流与恢复的推论。**已完成** |
 | E6c | `Services/ContribOrder.v`：`chain_perm`、冲突各方、中间件链的合流。**已完成** |
 | E6d | `Ext/Hygiene.v`：标记改写、读自己的私有名、覆盖条件、汇总。**已完成** |
-| E6e | checker 实验：宿主桩加一个"贡献模式" (`webServer`、`settings.configure` 改为 owned；撞名记为冲突值；中间件按优先级排序)，插件代码不动，重跑全部场景 |
+| E6e | checker 实验：宿主桩加一个"贡献模式"，插件代码不动，重跑全部场景。**已完成**，结果见下 |
 | E6f | 真实宿主：在 dsh 的 `webServer` 上实现 H1–H3，重跑 `real/scenarios/` 下的 A 类与 free-search 场景 |
 
-E6e 的预期 (都是待检验的假设)：
+### E6e 的结果 (2026-11-26)
 
-- A 类中 12 个留下路由的故障注入见证和 2 个 A′ 见证消失。故障点不限于 `webServer`：windows-mcp 在 `tools.register` 抛错时同样留下路由，因为它从不保存路由的 disposer；
-- dsh-ops 的见证保留 (它的问题在插件内部)；
-- `pair-ds-harness-remote-dsh-remote` 保留 (键层面)；
-- 不应出现新见证。出现的话，多半是插件依赖了"先到者生效"或撞名时抛错，这本身就是要报告的结果。
+**做法。** checker 加了一个开关 `CHECK_CONTRIB=1` (`checker/lib/host.mjs`、`world.mjs`)：
+
+- H1：原来返回裸 disposer 的登记 (`webServer.register`、`registerUpgrade`、`registerFallback`、`tapIndex`、`settings.configure`) 全部改为经调用者的 fiber 登记，与 `tools.register` 相同；
+- H2：任何登记表撞名都不抛错，同名的登记按多重集全部留下，快照里同一个键出现几行就是几方。
+
+中间件按优先级排序没有做：那要改 Cordis 的事件分发，而不是宿主桩。插件代码一行没动。全量运行 `check --all` 与 `pair ds-harness-remote dsh-remote`；dsh-mobile-plugin 在满载的并行池里全部判为不稳定，与以往一样，按惯例单独重跑。
+
+**结果：50 个见证变成 39 个。**
+
+| | 个数 | 内容 |
+|---|---|---|
+| 消失 | 12 | A 类 11 个故障注入见证 (dshmarket、dsh-remote、whale-widget ×2、connect-workbuddy、qqbot、windows-mcp ×3、free-search、mobile-plugin 的 `register-2`)，以及 A′ 的 windows-mcp 卸载残留 |
+| 保留，但路由残留没了 | 3 | dsh-mobile-plugin 的卸载见证与 `registerUpgrade-1` 故障见证：原来 869 行差异中 864 行是路由，现在只剩 B 类的 3 个 `globalThis` 槽和计时器计数。另一个故障点 `register-3` 在列表里显示为"新增"，内容与这两个相同，只是最短故障点从第 2 次移到第 3 次 |
+| 原样保留 | 35 | B 类全部 (prime-memory 的 11 个、session-superagent、cost-meter、ds-harness-remote、pet、whale 的 dns、dsh-im)；C2 全部 (free-search 复用 ctx 的 6 个、token-diet 2 个、ds-harness-remote 2 个、dsh-remote、dshmarket 2 个)；dsh-ops 的提示段序号；`dshRemote` 的 pair 见证 |
+
+对照预期：
+
+- **路由泄漏全部消失。** A 类与 A′ 类里留下路由的见证共 14 个：12 个整个消失，dsh-mobile-plugin 的 2 个只剩 B 类内容。windows-mcp 在 `tools.register` 抛错时留下路由的两个见证也消失了，与预期一致。
+- **dsh-ops 与 `dshRemote` 保留**，与预期一致：前者是插件内部状态，后者是键层面的冲突。
+- **没有新问题。** 撞名不再抛错之后，没有插件因此出错：没有新的 fiber 失败，也没有新的差异种类。free-search 的"复用"写法、windows-mcp 把撞名吞成警告的写法，在贡献模式下都不再触发。
+- **一个意外。** dsh-mobile-plugin 的两个提供者重启见证，原来报"多一个 ACTIVE fiber、多一个 TCP 监听"，现在只剩计时器计数的抖动。真实宿主上这两个见证本来就判为误报；现在看来，checker 里多出的 fiber 与它的分派器在裸登记下撞名有关。这一点没有单独核实。
+
+**解读。** 宿主侧的 H1、H2 两条改动，消除的正好是报告里归为 A、A′ 的那一类，其余类别 (B 的进程级状态、C2 的读一次服务与复用 ctx、插件内部的序号表、键层面的服务名冲突) 一个不少。这与 §6 的覆盖表一致：贡献键解决的是"键里面的登记表"，不越界。
+
+**复现。** 在 `checker/` 下运行：
+
+```sh
+CHECK_CONTRIB=1 CHECK_OUT=.out/contrib sh check.sh check --all
+CHECK_CONTRIB=1 CHECK_OUT=.out/contrib sh check.sh pair ds-harness-remote dsh-remote
+CHECK_CONTRIB=1 CHECK_OUT=.out/contrib CHECK_JOBS=4 sh check.sh check dsh-mobile-plugin
+```
 
 ## 8. 未决问题
 

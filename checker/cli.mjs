@@ -16,6 +16,8 @@ import * as S from './lib/scenarios.mjs'
 import { resolvePlugin, PLUGINS_ROOT } from './lib/plugins.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+// 输出目录: 默认是本目录; 贡献模式等实验用 CHECK_OUT 另放, 不碰基线的 witnesses/ 与 reports/.
+const out = process.env.CHECK_OUT ? path.resolve(process.env.CHECK_OUT) : here
 const [cmd, ...rest] = process.argv.slice(2)
 const opts = {}
 const args = []
@@ -30,8 +32,8 @@ let quiet = false // 一次处理多个插件或见证时, 每个只打印一行
 const slug = s => s.replace(/^\.\//, '').replace(/[^A-Za-z0-9_.-]+/g, '_')
 
 function saveWitness(name, w) {
-  fs.mkdirSync(path.join(here, 'witnesses'), { recursive: true })
-  const file = path.join(here, 'witnesses', `${name}.json`)
+  fs.mkdirSync(path.join(out, 'witnesses'), { recursive: true })
+  const file = path.join(out, 'witnesses', `${name}.json`)
   fs.writeFileSync(file, JSON.stringify(w, null, 2) + '\n')
   return path.relative(here, file)
 }
@@ -96,8 +98,8 @@ async function stable(w) {
   const ok = runs.every(d => key(d) === key(w.summary))
   if (!ok) {
     // 不稳定的候选留在 .out/unstable/ 里备查, 不进 witnesses/.
-    fs.mkdirSync(path.join(here, '.out/unstable'), { recursive: true })
-    fs.writeFileSync(path.join(here, '.out/unstable', `${w.name}.json`), JSON.stringify({ ...w, reruns: runs }, null, 2))
+    fs.mkdirSync(path.join(out, '.out/unstable'), { recursive: true })
+    fs.writeFileSync(path.join(out, '.out/unstable', `${w.name}.json`), JSON.stringify({ ...w, reruns: runs }, null, 2))
   }
   return ok
 }
@@ -320,8 +322,8 @@ async function sweep() {
 }
 
 function writeReport(name, lines) {
-  fs.mkdirSync(path.join(here, 'reports'), { recursive: true })
-  const file = path.join(here, 'reports', `${name}.md`)
+  fs.mkdirSync(path.join(out, 'reports'), { recursive: true })
+  const file = path.join(out, 'reports', `${name}.md`)
   fs.writeFileSync(file, lines.join('\n') + '\n')
   if (quiet) {
     const n = lines.filter(l => l.includes('✗')).length

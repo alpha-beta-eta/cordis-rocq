@@ -61,6 +61,7 @@ export class World {
   // 返回的 undo 是幂等的, 只撤掉这一次登记.
   insert(tableName, key, entry, { dup = 'throw' } = {}) {
     const t = this.table(tableName)
+    if (process.env.CHECK_CONTRIB === '1') return this.contribute(t, key, entry)
     if (t.has(key)) {
       if (dup === 'throw') throw new Error(`duplicate ${tableName} "${key}"`)
     }
@@ -71,6 +72,23 @@ export class World {
       if (!active) return
       active = false
       if (t.get(key) === cell) t.delete(key)
+    }
+  }
+
+  // 贡献模式: 同名的登记都留下 (多重集), 撞名不抛错. 快照里同一个键出现几行, 就是几方冲突.
+  contribute(t, key, entry) {
+    const cell = { ...entry, contrib: true }
+    const prev = t.get(key)
+    const list = prev?.contribs ?? (prev ? [prev] : [])
+    list.push(cell)
+    t.set(key, { contribs: list })
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      const at = list.indexOf(cell)
+      if (at !== -1) list.splice(at, 1)
+      if (!list.length && t.get(key)?.contribs === list) t.delete(key)
     }
   }
 
@@ -107,7 +125,7 @@ export class World {
       if (!t.size) continue
       const rows = []
       for (const [key, cell] of t) {
-        const cells = key === '*' ? cell : [cell]
+        const cells = key === '*' ? cell : cell.contribs ?? [cell]
         for (const c of cells) {
           const row = { key: key === '*' ? undefined : key, view: c.view }
           if (owners) row.owner = c.owner
@@ -115,7 +133,8 @@ export class World {
         }
       }
       if (name.endsWith('[]')) out[name] = rows // 有序表保持次序
-      else out[name] = rows.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+      else out[name] = rows.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1
+        : String(a.owner ?? '') < String(b.owner ?? '') ? -1 : String(a.owner ?? '') > String(b.owner ?? '') ? 1 : 0))
     }
     return out
   }
