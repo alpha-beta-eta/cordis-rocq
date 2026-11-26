@@ -1,6 +1,6 @@
 # 贡献键：让登记按构造合流 (设计草案)
 
-2026-11-26。状态：E6a、E6b 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`)，其余阶段为草案。
+2026-11-26。状态：E6a–E6c 已形式化 (`theories/Services/Contrib.v`、`ContribConf.v`、`ContribOrder.v`)，其余阶段为草案。
 
 ## 0. 动机
 
@@ -60,7 +60,7 @@ Res := RAbsent | ROne (t : Tag) (v : V) | RConflict
 
 先取 `q` 看得见的贡献：私有名只看标记为 `q` 的贡献，公开名看全部贡献。再取其中优先级最高的、去重后的条目：没有就是 `RAbsent`，恰好一个就是 `ROne`，否则是 `RConflict`。这里的规则可以换，唯一的要求是 **对置换不变**：`Permutation s s' -> resolve s q x = resolve s' q x`。
 
-`RConflict` 暂不列出冲突各方的标记：要让这个列表对置换不变，得先给标记一个全序并排序，与下面的链共用 E6c 的排序引理。在那之前，冲突各方可以逐个查询。
+`RConflict` 本身不列出冲突各方；各方由 E6c 的 `parties` 给出：最高优先级的贡献按全序排好，对置换不变。
 
 **推导：链。** 中间件按 `≤ₑ` 排序后组成链：`chain s := sort (≤ₑ) s`。只要 `≤ₑ` 是全序，排序结果只取决于多重集：`Permutation s s' -> chain s = chain s'`。宿主可以按 (优先级, 标记, 值的键) 排序；插件需要排在别人前面时，显式提高优先级，而不是靠"先装"。
 
@@ -110,12 +110,17 @@ contrib_meet a b  :=  ¬ (a = Read ∧ b 是 Contribute)  ∧  ¬ (b = Read ∧ 
 
 **恢复层为什么要求条目不同。** 汇总定理的恢复层要求逆在**任意**状态上都与对方的操作独立 (`RevertIndep`)，而不只是在操作发生之后的状态上 (合流层的 `RevAfter`)。从一个不含 `e` 的状态里删一个 `e` 什么也不做，再补上一个 `e` 就多出来了，所以两次相同的贡献在这样的状态上不独立。这些状态在真实执行中到不了，但定理的陈述覆盖它们。E6d 的标记让不同组件的条目天然不同；剩下的情形是同一个组件的两个副本 (不提供键、可以有多个 fiber 的组件) 贡献同一条目，需要单独排除，或者把恢复定理的前提也弱化到"操作发生之后"。后者是对核心的改进，留作未决问题。
 
-`Services/ContribOrder.v`：
+`Services/ContribOrder.v` (E6c，已完成，不依赖任何公理)：
 
-| 命题 | 内容 | 预期难度 |
-|---|---|---|
-| `chain_perm` | `Permutation s s' -> chain s = chain s'` | 中。需要"同一多重集的两个按全序排好的列表相等"；Stdlib 的 `Sorted` 与 `Permutation` 有零件，唯一性可能要自己证 |
-| `chain_confluence` | 两次调度后中间件链逐项相等，所以任何按链组合的分发结果相同 | 由前两项得到。这是 `Listeners.v` 给不出的结论 |
+| 命题 | 内容 |
+|---|---|
+| `sort_unique`、`isort_perm_eq` | 按全序排好的两个列表互为置换时相等；所以插入排序的结果只取决于多重集。Stdlib 没有这条唯一性，在这里证了 |
+| `prio_order` | "优先级高者在前，同优先级按任意全序决胜"本身是全序。宿主按这个规则排序即可满足前提 |
+| `chain_perm` | 名字 `x` 下的链 (该名字的全部贡献，排好序) 只取决于多重集 |
+| `parties_perm`、`parties_in` | 冲突各方 (最高优先级的贡献，排好序) 只取决于多重集，且都是 `q` 看得见的存活贡献。这补上了 E6a 里 `RConflict` 不列出各方的缺口 |
+| `chain_confluence`、`chain_static` | 汇总定理读到链与冲突各方上：两次调度、以及静态组装，在每个名字下得到同一条链、同一组冲突方。这是 `Listeners.v` 给不出的结论 |
+
+链只决定谁先运行，不让两个互不交换的处理器变得一致；它让结果只取决于贡献的集合，这正是合流所要求的。
 
 `Ext/Hygiene.v`：
 
@@ -170,7 +175,7 @@ ctx.on('tools/pre-execute', handler, { priority: 10 })
 |---|---|
 | E6a | `Services/Contrib.v`：服务定义、良态、`resolve_perm`、私有名隔离。**已完成** |
 | E6b | `Services/ContribConf.v`：`contrib_hyps`、`contrib_revertible`、合流与恢复的推论。**已完成** |
-| E6c | `Services/ContribOrder.v`：`chain_perm` 与中间件链的合流 |
+| E6c | `Services/ContribOrder.v`：`chain_perm`、冲突各方、中间件链的合流。**已完成** |
 | E6d | `Ext/Hygiene.v`：标记改写、`hyg_covers`、私有名隔离、汇总 |
 | E6e | checker 实验：宿主桩加一个"贡献模式" (`webServer`、`settings.configure` 改为 owned；撞名记为冲突值；中间件按优先级排序)，插件代码不动，重跑全部场景 |
 | E6f | 真实宿主：在 dsh 的 `webServer` 上实现 H1–H3，重跑 `real/scenarios/` 下的 A 类与 free-search 场景 |

@@ -33,6 +33,7 @@ theories/Derived.v
 theories/Summary.v
 theories/Services/Tiers.v
 theories/Services/ContribConf.v
+theories/Services/ContribOrder.v
 theories/Ext/Optional.v
 theories/Ext/OptProgress.v
 theories/Ext/OptConfluence.v
