@@ -1,0 +1,256 @@
+[
+ {
+  "name": "P1 handover: ds-harness-remote 先装, 卸载后 dsh-remote 接手 dshRemote?",
+  "predict": "不同: 输家不接手",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- cordis.services dshRemote (service) @L"
+  ]
+ },
+ {
+  "name": "P1 handover: dsh-remote 先装, 卸载后 ds-harness-remote 接手 dshRemote?",
+  "predict": "不同: 输家不接手",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- cordis.services dshRemote (service) @L"
+  ]
+ },
+ {
+  "name": "P2 heal: dsh-whale-widget 第 2 次 register 抛错后重启 webServer, 是否等于正常装上?",
+  "predict": "未知: 取决于 FAILED 的 fiber 是否随依赖重跑",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "webServer.indexTaps[]: [tap] → []",
+   "- webServer.routes exact /dsh-whale/about.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/api-models.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/audio-fragment (exact) @p",
+   "- webServer.routes exact /dsh-whale/audio-fragment.wav (exact) @p",
+   "- webServer.routes exact /dsh-whale/audio.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/balance-adjustments.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/balance.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/bubble-img-upload.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/bubble-img.png (exact) @p",
+   "- webServer.routes exact /dsh-whale/bubble-imgs.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/bubble.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/image.png (exact) @p",
+   "- webServer.routes exact /dsh-whale/last-turn.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/role-delete.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/role-image.png (exact) @p",
+   "- webServer.routes exact /dsh-whale/role-pin.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/roles.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/rua.gif (exact) @p",
+   "- webServer.routes exact /dsh-whale/size.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/sound/press.mp3 (exact) @p",
+   "- webServer.routes exact /dsh-whale/sound/release.mp3 (exact) @p",
+   "- webServer.routes exact /dsh-whale/update-check.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/usage-records.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/usage-settings.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/wait.json (exact) @p",
+   "- webServer.routes exact /dsh-whale/widget.js (exact) @p",
+   "cordis.listeners: [p | p | p | p | p] → [p]",
+   "+ cordis.fibers p/whale-balance-widget#1 (FAILED: checker: injected fault at webServer.register (call #2)) @p",
+   "- cordis.fibers p/whale-balance-widget#1 (ACTIVE) @p"
+  ]
+ },
+ {
+  "name": "P2 heal: dshmarket 第 2 次 register 抛错后重启 webServer, 是否等于正常装上?",
+  "predict": "未知: 取决于 FAILED 的 fiber 是否随依赖重跑",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- webServer.routes exact /dsh-market/ai-recommend (exact) @p",
+   "- webServer.routes exact /dsh-market/ai-search (exact) @p",
+   "- webServer.routes exact /dsh-market/ai-use-my-plugins (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/capabilities (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/operations (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/restart (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/rollback (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/updates (exact) @p",
+   "- webServer.routes exact /dsh-market/api/v1/updates/summary (exact) @p",
+   "- webServer.routes exact /dsh-market/approve-builds (exact) @p",
+   "- webServer.routes exact /dsh-market/backup (exact) @p",
+   "- webServer.routes exact /dsh-market/block (exact) @p",
+   "- webServer.routes exact /dsh-market/build-env (exact) @p",
+   "- webServer.routes exact /dsh-market/bundle-order (exact) @p",
+   "- webServer.routes exact /dsh-market/cancel (exact) @p",
+   "- webServer.routes exact /dsh-market/catalogs (exact) @p",
+   "- webServer.routes exact /dsh-market/catalogs/add (exact) @p",
+   "- webServer.routes exact /dsh-market/catalogs/remove (exact) @p",
+   "- webServer.routes exact /dsh-market/changelog (exact) @p",
+   "- webServer.routes exact /dsh-market/channel (exact) @p",
+   "- webServer.routes exact /dsh-market/check (exact) @p",
+   "- webServer.routes exact /dsh-market/delete-snapshot (exact) @p",
+   "- webServer.routes exact /dsh-market/discovery-compatibility (exact) @p",
+   "- webServer.routes exact /dsh-market/dismiss-broken (exact) @p",
+   "- webServer.routes exact /dsh-market/entry-visibility (exact) @p",
+   "- webServer.routes exact /dsh-market/favorite (exact) @p",
+   "- webServer.routes exact /dsh-market/find-compatible (exact) @p",
+   "- webServer.routes exact /dsh-market/find-plugin/result (exact) @p",
+   "- webServer.routes exact /dsh-market/gist (exact) @p",
+   "- webServer.routes exact /dsh-market/github-proxy (exact) @p"
+  ]
+ },
+ {
+  "name": "P2 heal: dsh-remote 第 2 次 register 抛错后重启 webServer, 是否等于正常装上?",
+  "predict": "未知: 取决于 FAILED 的 fiber 是否随依赖重跑",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- webServer.routes exact /dsh-remote/audit (exact) @p",
+   "- webServer.routes exact /dsh-remote/bindings (exact) @p",
+   "- webServer.routes exact /dsh-remote/connect (exact) @p",
+   "- webServer.routes exact /dsh-remote/current (exact) @p",
+   "- webServer.routes exact /dsh-remote/explorer-auto-open (exact) @p",
+   "- webServer.routes exact /dsh-remote/forget-key (exact) @p",
+   "- webServer.routes exact /dsh-remote/forwards (exact) @p",
+   "- webServer.routes exact /dsh-remote/fs (exact) @p",
+   "- webServer.routes exact /dsh-remote/git (exact) @p",
+   "- webServer.routes exact /dsh-remote/home (exact) @p",
+   "- webServer.routes exact /dsh-remote/local-copy/publish (exact) @p",
+   "- webServer.routes exact /dsh-remote/local-copy/read (exact) @p",
+   "- webServer.routes exact /dsh-remote/local-list (exact) @p",
+   "- webServer.routes exact /dsh-remote/local-mkdir (exact) @p",
+   "- webServer.routes exact /dsh-remote/local-pick (exact) @p",
+   "- webServer.routes exact /dsh-remote/ls (exact) @p",
+   "- webServer.routes exact /dsh-remote/machines (exact) @p",
+   "- webServer.routes exact /dsh-remote/mirror (exact) @p",
+   "- webServer.routes exact /dsh-remote/read (exact) @p",
+   "- webServer.routes exact /dsh-remote/resolve-mirror (exact) @p",
+   "- webServer.routes exact /dsh-remote/search (exact) @p",
+   "- webServer.routes exact /dsh-remote/ssh-config (exact) @p",
+   "- webServer.routes exact /dsh-remote/status (exact) @p",
+   "- webServer.routes exact /dsh-remote/task (exact) @p",
+   "- webServer.routes exact /dsh-remote/tasks (exact) @p",
+   "- webServer.routes exact /dsh-remote/telemetry (exact) @p",
+   "- webServer.routes exact /dsh-remote/term-secret (exact) @p",
+   "- webServer.routes exact /dsh-remote/term/close (exact) @p",
+   "- webServer.routes exact /dsh-remote/term/input (exact) @p",
+   "- webServer.routes exact /dsh-remote/term/list (exact) @p"
+  ]
+ },
+ {
+  "name": "P2 heal: dsh-connect-workbuddy 第 2 次 register 抛错后重启 webServer, 是否等于正常装上?",
+  "predict": "未知: 取决于 FAILED 的 fiber 是否随依赖重跑",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/__save (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/account-credits (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/accounts/refresh (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/benefit/claim (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/checkin (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/cli-live (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/device-profile (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/device-sdk (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/media-models (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/models/refresh (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/oauth (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/pool (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/probe (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/tps (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/transfer (exact) @p",
+   "- webServer.routes exact /plugins/dsh-connect-workbuddy/usage (exact) @p",
+   "+ cordis.fibers p/dsh-connect-workbuddy#6 (FAILED: checker: injected fault at webServer.register (call #2)) @p",
+   "- cordis.fibers p/dsh-connect-workbuddy#6 (ACTIVE) @p"
+  ]
+ },
+ {
+  "name": "P2 heal: tencent-connect__dsh-qqbot 第 2 次 register 抛错后重启 webServer, 是否等于正常装上?",
+  "predict": "未知: 取决于 FAILED 的 fiber 是否随依赖重跑",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "- webServer.routes exact /qqbot/im-qqbot/bind (exact) @p",
+   "- webServer.routes exact /qqbot/im-qqbot/bind/manual (exact) @p",
+   "- webServer.routes exact /qqbot/im-qqbot/bind/refresh (exact) @p",
+   "- webServer.routes exact /qqbot/im-qqbot/bind/unbind (exact) @p",
+   "- webServer.routes exact /qqbot/im-qqbot/config (exact) @p",
+   "+ cordis.fibers p/im-qqbot#1 (FAILED: checker: injected fault at webServer.register (call #2)) @p",
+   "- cordis.fibers p/im-qqbot#1 (ACTIVE) @p"
+  ]
+ },
+ {
+  "name": "P3 accumulate: dshmarket 重启 webServer 3 次 vs 1 次",
+  "predict": "不同: 累积",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "+ cordis.fibers p/dsh-market#5 (ACTIVE) @p",
+   "+ cordis.fibers p/dsh-market#6 (ACTIVE) @p"
+  ]
+ },
+ {
+  "name": "P3 accumulate: dsh-prime-memory 重启 webServer 3 次 vs 1 次",
+  "predict": "不同: 累积",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "+ listener process.on(beforeExit) = 4",
+   "- listener process.on(beforeExit) = 2"
+  ]
+ },
+ {
+  "name": "P3 accumulate: dsh-prime-memory 重启 tools 3 次 vs 1 次",
+  "predict": "不同: 累积",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "+ listener process.on(beforeExit) = 4",
+   "- listener process.on(beforeExit) = 2"
+  ]
+ },
+ {
+  "name": "P3 accumulate: dsh-session-superagent 重启 webServer 3 次 vs 1 次",
+  "predict": "不同: 累积",
+  "stable": true,
+  "verdict": "same",
+  "detail": []
+ },
+ {
+  "name": "P4 emit: whale-widget 卸载后 index-inject 不再推行",
+  "predict": "第 1 次 1 行, 第 2 次 0 行",
+  "stable": true,
+  "verdict": "emit rows 1, 0",
+  "detail": []
+ },
+ {
+  "name": "P4 emit: whale-widget 在 webServer 缺席时也推行",
+  "predict": "1 行",
+  "stable": true,
+  "verdict": "emit rows 1",
+  "detail": []
+ },
+ {
+  "name": "P5 config: prime-memory 打开封印组后装上再卸载",
+  "predict": "只有 beforeExit 残留",
+  "stable": true,
+  "verdict": "leak",
+  "detail": [
+   "listener process.on(beforeExit): 0 → 1"
+  ]
+ },
+ {
+  "name": "P5 config: 打开封印组后工具数是否变多 (覆盖面)",
+  "predict": "不同: 多出 legacy / graphAdmin / skills 组",
+  "stable": true,
+  "verdict": "differ",
+  "detail": [
+   "+ tools memory_add (tool) @p",
+   "+ tools memory_delete (tool) @p",
+   "+ tools memory_graph_admin (tool) @p",
+   "+ tools memory_import (tool) @p",
+   "+ tools memory_migrate_relation (tool) @p",
+   "+ tools memory_reproject (tool) @p",
+   "+ tools memory_ruminate_cancel (tool) @p",
+   "+ tools memory_ruminate_status (tool) @p",
+   "+ tools memory_skill_archive (tool) @p",
+   "+ tools memory_skill_list (tool) @p",
+   "+ tools memory_skill_pin (tool) @p",
+   "+ tools memory_skill_read (tool) @p",
+   "+ tools memory_update (tool) @p"
+  ]
+ }
+]

@@ -1,0 +1,127 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-remote",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "squat",
+  "path": "/dsh-remote/status"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-remote",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-remote",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "get",
+  "path": "/dsh-remote/workspace-context",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-remote"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-remote",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-remote",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-remote/workspace-context",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "done"
+ }
+]

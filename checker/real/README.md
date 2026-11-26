@@ -41,6 +41,23 @@ sh run.sh proc-im scenarios/process-im.json @xmanrui/dsh-im@5.10.0
 # dsh-ops 的故障注入见证: 占住它第 2 次要登记的提示段名, 让真实的 systemPrompt.section 因重名抛错
 sh run.sh ops-section scenarios/ops-section.json dsh-ops@0.5.5
 
+# 模板之外的序列 (P1, P2)
+# P1 dshRemote 交接: 同装落定后停用赢家 dsh-remote, 看 ds-harness-remote 是否接手; 再重启它作对照
+sh run.sh p1-handover scenarios/remote-handover.json ds-harness-remote@0.6.7 dsh-remote@1.3.1
+# P2 故障后重启 webServer: 占住第 2 条路由让插件中途失败, 再重启 webServer, 最后重启插件作对照
+node make-fault-restart.mjs dsh-whale-widget /dsh-whale /dsh-whale/image.png /dsh-whale/rua.gif > scenarios/p2-whale.json
+sh run.sh p2-whale scenarios/p2-whale.json dsh-whale-widget@0.4.2
+# 其余四个同理: p2-dshmarket, p2-dsh-remote, p2-connect-workbuddy, p2-qqbot (路由见各自的 scenarios/p2-*.json)
+# P3 连续重启累积: 每次重启后记 fiber 与进程级状态
+node make-restarts.mjs dsh-memory 3 webserver tools > scenarios/p3-memory.json
+sh run.sh p3-memory scenarios/p3-memory.json dsh-prime-memory@0.26.72
+node make-restarts.mjs session-superagent 3 webserver > scenarios/p3-superagent.json   # 对照
+sh run.sh p3-superagent scenarios/p3-superagent.json dsh-session-superagent@0.10.12
+# P4 index-inject 行: 装上, 停用, webServer 缺席时启用, webServer 回来
+sh run.sh whale-index-inject scenarios/whale-index-inject.json dsh-whale-widget@0.4.2
+# P5 非默认配置: 热更新打开 prime-memory 的封印工具组, 再带配置重启, 最后停用
+sh run.sh memory-tool-groups scenarios/memory-tool-groups.json dsh-prime-memory@0.26.72
+
 # E6f (../../docs/CONTRIB.md): 贡献键宿主. 硬链接复制一份宿主, 只改 webserver 一个文件 (owned 登记, 撞名按多重集);
 # 之后任一场景加 DSH_HOST=dsh-host-contrib 即在它上面跑, 名字后加 -contrib 以免覆盖基线的 /tmp 目录
 node contrib-host.mjs ~/.cache/cordis-check

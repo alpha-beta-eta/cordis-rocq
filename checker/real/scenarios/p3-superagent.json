@@ -1,0 +1,102 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "装上后"
+ },
+ {
+  "op": "proc",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "webserver 重启 1 次"
+ },
+ {
+  "op": "proc",
+  "label": "webserver 重启 1 次"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "webserver 重启 2 次"
+ },
+ {
+  "op": "proc",
+  "label": "webserver 重启 2 次"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "session-superagent",
+  "label": "webserver 重启 3 次"
+ },
+ {
+  "op": "proc",
+  "label": "webserver 重启 3 次"
+ },
+ {
+  "op": "done"
+ }
+]

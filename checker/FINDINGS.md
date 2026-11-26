@@ -356,6 +356,55 @@ checker 的见证 `dsh-ops-fault-systemPrompt.section-2`：第 2 次 `systemProm
 
 复现，而且比见证更进一步：一次失败之后，每次重启序号都再涨 2，不会回落。原因在 `publication/ownership.js`：按 `ctx.root` 共享的 `sequence` 只在这一族的 `rows` 清空时才随整族删除，而 `publication/ptc.js` 先登记提示段 (`:374`)，再在下一个 `ctx.effect` 里登记 `ownership?.dispose()` (`:375`)。登记提示段一抛错，移除 row 的撤销就没有机会登记，这一行永远留在 `rows` 里。这正是 A 类的同一个模式：先做效应，后登记逆。没有失败过时，正常重启会清空 `rows`，序号归零，所以对照组不变。段名带上的序号会进到提示的组装里；更要紧的是那个死掉的 row 一直在 `rows` 里，每次 `notify` 都还会调它的 `changed`。
 
+## 模板之外的序列 (2026-11-26)
+
+五种固定场景只覆盖单一动作：一次故障、一个服务晚到或重启一次、两个插件换次序。这一轮改为先读插件源码与定理前提，提出模板表达不了的组合，再在 checker 上执行，用同一套判据和稳定性门槛判定 ([beyond.mjs](beyond.mjs)，结果在 [reports/beyond.json](reports/beyond.json))，最后在真实宿主上逐一复现。候选由 LLM 读源码提出，但提出时已经读过本报告，不是盲测。
+
+| 组 | 序列 | 读源码得出的预测 | checker (三次一致) | 真实宿主 |
+|---|---|---|---|---|
+| P1 服务交接 | 两个 `dshRemote` 提供者同装，卸载赢家 | 两边都吞掉冲突且不重试 (ds-harness-remote 只在 `replaceServer` 时重试，`dist/index.js:113054`)，输家不接手 | 两种次序都是 `dshRemote` 无人提供 | **复现** |
+| P2 故障后重启 | 第 2 次 `webServer.register` 抛错，再重启 webServer | 未知：取决于失败的 fiber 是否随依赖重跑 | 5 个插件都是：泄漏被清掉，失败的 fiber 不重跑，插件一条路由都不剩 | **复现** (5 个插件) |
+| P3 连续重启 | 重启 3 次与 1 次比较 | dshmarket、prime-memory 累积 | dshmarket 每次多一个 fiber；prime-memory 的 `beforeExit` 2 → 4；session-superagent 不变 (对照) | **复现** |
+| P4 事件分发 | whale-widget：分发 index-inject，卸载，再分发；webServer 缺席时分发 | 行用 `root.on` 登记，不依赖服务，卸载即撤 | 1 行、0 行；缺席时 1 行 | **复现**，干净 |
+| P5 非默认配置 | prime-memory 打开 `live.toolLegacy`、`toolGraphAdmin`、`skillsEnabled` | 多登记几组工具，tools 是 owned，卸载干净 | 多出 13 个工具；卸载后只有已知的 `beforeExit` 残留 | **复现**，热更新路径也干净 |
+
+驱动为此新增两个操作：`indexInject` 收集一次注入表 (peer 取宿主所有者，因为宿主的 remoteAccess 监听器要读 `peer.principal`)；`config` 改条目配置，只改 volatile 节时 loader 走热更新，不重挂。场景与生成器见 [real/README.md](real/README.md) 的"模板之外的序列"。
+
+**P1：赢家卸载后 `dshRemote` 空着。** `scenarios/remote-handover.json`，先装 ds-harness-remote 再装 dsh-remote：
+
+| 时刻 | `dshRemote` 的提供者 | ds-harness-remote |
+|---|---|---|
+| 同装落定后 | dsh-remote (ds-harness-remote 日志里一条 `SERVICE_PROVIDE_CONFLICT`) | 5 个 fiber ACTIVE |
+| 停用 dsh-remote 后 | **无** | 5 个 fiber 仍 ACTIVE |
+| 再重启 ds-harness-remote 后 | ds-harness-remote (`activateWhenCarrierReady`) | — |
+
+报告原来只说"谁拿到 `dshRemote` 取决于时序"。这里的后果更直接：两个插件同装时，用户停用其中一个，另一个的远程 API 就消失，所有 fiber 照样 ACTIVE，日志里只有启动时那一条警告。这是 R3 (冲突应在插入时拒绝) 与 C2 (按服务在不在决定行为后不再响应) 同时被违反。
+
+**P2：故障后重启，泄漏清掉了，插件也死了。** `make-fault-restart.mjs` 生成，5 个插件结果相同。以 whale-widget 为例 (`scenarios/p2-whale.json`)：
+
+| 时刻 | fiber | `/dsh-whale*` 路由 | `/dsh-whale/image.png` |
+|---|---|---|---|
+| 装上后 | ACTIVE ×2 | 26 | handler#1 |
+| 占住 `/dsh-whale/rua.gif` 后启用 | 内层 FAILED：`duplicate exact route "/dsh-whale/rua.gif"` | 2 (1 条泄漏 + 驱动的占位) | handler#28 |
+| 重启 webServer 后 | **内层仍 FAILED，错误仍是那次撞名** | **0** | 未登记，HTTP 404 |
+| 再重启插件后 | ACTIVE ×2 | 26 | handler#29 (新实例) |
+
+dshmarket (63 条)、dsh-remote (44 条)、connect-workbuddy (16 条)、qqbot (5 条) 都是同样四步：撞名后各留 1 条泄漏；重启 webServer 后 0 条，失败的 fiber 不变；重启插件后全部恢复。原因在 Cordis 的 `Fiber._setEpoch` (`.vendor/cordis/fiber.ts:633`)：失败的 fiber 只能经 `update()` 清掉 `_error` 后恢复，inject 的服务换了实例也不重跑。这与模型一致 (Progress.v 的"稳定"里，失败的 fiber 停在 Inactive)，不违反任何前提；但对用户来说，重启 webServer 把"泄漏 1 条、装不回去"变成了"一条路由都没有、表上一条过时的错误"。撞名的原因已经随旧表消失，插件却不会自己再试。E6f 的贡献键宿主上撞名不再失败，这一序列也就不触发；别的失败仍会触发。
+
+**P3：每次重启累积。** `make-restarts.mjs` 生成：
+
+| 插件 | 装上后 | webServer 重启 1、2、3 次 | tools 重启 1、2、3 次 |
+|---|---|---|---|
+| dsh-prime-memory：`beforeExit` 监听器 | 1 | 2、3、4 | 5、6、7 |
+| dshmarket：fiber 数 | 4 | 5、6、7 | — |
+| dsh-session-superagent (对照)：fiber 与进程状态 | 1 个 fiber | 不变 | — |
+
+prime-memory inject 了 webServer 与 tools (以及级联到的服务)，每次重启都重跑 apply，`dist/util/filelog.js:71` 每次加一个监听器。B 类原来只记"每次重装多一个"；这里看到的是任何一个被它 inject 的服务重启都会加，而宿主里这样的服务很多。全部 fiber 一直 ACTIVE。
+
+**P4：index-inject 行干净。** `scenarios/whale-index-inject.json`：装上后 1 行，停用后 0 行，webServer 缺席时启用 (内层 fiber PENDING) 仍是 1 行，webServer 回来后 1 行。与插件注释的设计意图一致。桌面端外壳在宿主启动时缓存一次注入表，那一层在宿主之外，没有测。
+
+**P5：非默认配置。** `scenarios/memory-tool-groups.json`：默认配置下 13 个封印工具都不在；热更新打开三个开关后 13/13，fiber 不重挂；带配置重启后 13/13；停用后这 13 个与核心的 `memory_search` 全部撤掉，计时器清零，`beforeExit` 剩 2 个 (装上时 1 个，重启插件又加 1 个)。覆盖面扩大，没有新问题。
+
 ## 与审计的对照
 
 - **checker 复现了审计的判定**：
@@ -373,7 +422,7 @@ checker 的见证 `dsh-ops-fault-systemPrompt.section-2`：第 2 次 `systemProm
 - **审计说有、checker 没有复现的**：
   - **`approval/request` 中间件的次序 (dsh-im 与 dsh-qqbot)**：两者都要等 IM 通道真正连上之后才登记这条中间件。checker 禁网，又没有真实账户，走不到这条路径。
   - **dsh-cost-meter 对 `ChildProcess.prototype.spawn` 的常驻补丁**：模块加载时它会临时打一个，apply 结束就按引用计数释放；常驻的那个排在一次 typert 注册之后，而这次注册在通用桩上失败了。
-  - **dsh-whale-widget 的 index-inject 行**：checker 看到卸载后监听器已经撤销，宿主每次 emit 都新建表。审计说的是桌面端宿主只收集一次的情形，不在桩的语义里。
+  - **dsh-whale-widget 的 index-inject 行**：checker 看到卸载后监听器已经撤销，宿主每次 emit 都新建表。审计说的是桌面端宿主只收集一次的情形，不在桩的语义里。补记 (2026-11-26)：P4 在 checker 与真实宿主上都分发了这个事件，卸载后行即消失，webServer 缺席时照样推行；桌面端的一次性缓存仍未覆盖。
 
 ## 覆盖面与没走到的部分
 
@@ -413,4 +462,5 @@ checker 的见证 `dsh-ops-fault-systemPrompt.section-2`：第 2 次 `systemProm
 - ~~支持 CJS 的 `require` 桩，覆盖 dsh-mobile-plugin。~~ 已完成 (第四轮)。
 - ~~落定改为等到没有 LOADING 的 fiber (设上限)。~~ 已完成 (第五轮)。
 - ~~在真实宿主上确认 dsh-mobile-plugin 的卸载残留。~~ 已完成：卸载残留复现，重启累积不复现。
+- 模板之外的序列 (P1–P5) 目前手写在 `beyond.mjs` 里。值得做的是把"读源码提出候选"变成可重复的一步：候选只用演算的动作 (install、dispose、provide、withdraw、fault、emit，加上配置)，判据与稳定性门槛不变，提出时不先读结论。
 - 给上游的报告或 PR：A 类的修法是统一的 (每登记一条立即登记它的逆)，可以给 7 个插件分别提。这是对外的动作，需要先确认。

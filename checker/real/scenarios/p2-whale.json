@@ -1,0 +1,127 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-whale",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-whale/image.png",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "squat",
+  "path": "/dsh-whale/rua.gif"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-whale",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-whale/image.png",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-whale",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-whale/image.png",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "get",
+  "path": "/dsh-whale/image.png",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-whale-widget"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-whale-widget",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-whale",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-whale/image.png",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "done"
+ }
+]

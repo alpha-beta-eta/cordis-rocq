@@ -1,0 +1,19 @@
+[
+ { "op": "settle" },
+ { "op": "wait", "ms": 5000 },
+ { "op": "services", "name": "dshRemote", "label": "同装落定后" },
+ { "op": "fibers", "id": "ds-harness-remote", "label": "同装落定后" },
+ { "op": "fibers", "id": "dsh-remote", "label": "同装落定后" },
+ { "op": "disable", "id": "dsh-remote" },
+ { "op": "settle" },
+ { "op": "wait", "ms": 5000 },
+ { "op": "services", "name": "dshRemote", "label": "停用 dsh-remote 后" },
+ { "op": "fibers", "id": "ds-harness-remote", "label": "停用 dsh-remote 后" },
+ { "op": "disable", "id": "ds-harness-remote" },
+ { "op": "settle" },
+ { "op": "enable", "id": "ds-harness-remote" },
+ { "op": "settle" },
+ { "op": "wait", "ms": 5000 },
+ { "op": "services", "name": "dshRemote", "label": "再重启 ds-harness-remote 后" },
+ { "op": "done" }
+]

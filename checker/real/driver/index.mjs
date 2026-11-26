@@ -24,6 +24,8 @@
 //   { op: 'listeners', event, label }     记下事件 event 上的监听器数, 按所属 loader 条目分组
 //   { op: 'graph', label }          记下每个服务的提供者条目, 以及提供者 fiber 链上每层的 inject (服务依赖图)
 //   { op: 'epoch', id, label }      记下条目根 fiber 的 epoch (inject 的服务实例 uid); 前后不同即被连带重启过
+//   { op: 'indexInject', match, label }   收集一次 webserver/index-inject 表, 记下含 match 的行数
+//   { op: 'config', id, merge }     改条目配置 (与现有配置按顶层键浅合并); 只改 volatile 节时热更新
 //   { op: 'done' }                        写出结果
 //
 // 驱动不 inject 任何服务, 每次用到 webServer 时再读: 这样场景可以停用 webServer 的提供者 (服务晚到),
@@ -242,6 +244,30 @@ export function apply(ctx) {
             // 前后不同说明它 inject 的某个服务换了实例, 即它被连带重启过.
             const entry = findEntry(step.id)
             record({ op: 'epoch', label: step.label, id: step.id, epoch: entry.fiber?._runner?.epoch ?? null, inject: Object.keys(entry.fiber?.inject ?? {}) })
+            break
+          }
+          case 'indexInject': {
+            // 收集一次 index-inject 表, 记下含 match 的行. webServer 在时走它自己的 collectIndexInjections
+            // (host/webserver/src/index.ts:725, 即 emit 一次再返回表); 不在时照同一写法直接 emit.
+            // peer 取宿主所有者自己的页面 (remoteAccess 的监听器要读 peer.principal.kind).
+            const peer = { principal: { kind: 'owner' } }
+            const ws = serviceItems('webServer')[0]?.value
+            let table = [], via = 'emit'
+            if (typeof ws?.collectIndexInjections === 'function') { table = ws.collectIndexInjections(peer); via = 'webServer' }
+            else ctx.root.emit('webserver/index-inject', table, peer)
+            const rows = table.filter(r => JSON.stringify(r).includes(step.match ?? ''))
+            record({ op: 'indexInject', label: step.label, via, rows: rows.length, total: table.length })
+            break
+          }
+          case 'config': {
+            // 改条目的配置: merge 的每个顶层键与现有配置浅合并一层. 只改 volatile 节时 loader 热更新, 不重挂.
+            const entry = findEntry(step.id)
+            const config = { ...(entry.options.config ?? {}) }
+            for (const [k, v] of Object.entries(step.merge)) {
+              config[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(config[k] ?? {}), ...v } : v
+            }
+            await entry.update({ config })
+            record({ op: 'config', id: step.id, merge: step.merge })
             break
           }
           case 'fibers': record({ op: 'fibers', label: step.label, id: step.id, ...entryFibers(step.id) }); break

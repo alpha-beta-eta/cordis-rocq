@@ -16,6 +16,7 @@ sh check.sh check --all                            # 全部插件, 共用一个�
 sh check.sh pair ds-harness-remote dsh-remote      # 两个插件: 两种安装次序
 sh check.sh sweep                                  # 全部插件各装上卸载一次 (覆盖面普查)
 sh check.sh replay witnesses/*.json                # 重放见证 (全部复现时退出码为 1)
+node --no-warnings --import ./register.mjs beyond.mjs [P2]   # 模板之外的序列 (读源码提出), 结果写到 reports/beyond.json
 ```
 
 并行度默认是 CPU 数的一半，可以用 `CHECK_JOBS` 改。`CHECK_CONTRIB=1` 打开贡献模式 ([../docs/CONTRIB.md](../docs/CONTRIB.md) 的 E6e)：所有登记都经调用者的 fiber，撞名不抛错而按多重集记下。`CHECK_OUT=<目录>` 把见证与报告写到别处，不碰 `witnesses/` 与 `reports/`。转译结果和 dsh 包索引缓存在 `.cache/` 下，删掉即可重建。
@@ -42,6 +43,7 @@ sh check.sh replay witnesses/*.json                # 重放见证 (全部复现�
 | `lib/run.mjs` | 并行执行 |
 | `hooks.mjs` | 模块解析钩子：dsh 包映射、找不到的包换成吸收型桩、TS 转译 |
 | `require-hooks.mjs` | 对 CJS 的 `require` 做同样的事：补丁 `Module._resolveFilename`，桩是 `.cache/require-stubs/` 下的真实文件；dsh 包经一层薄壳给出 tsdown CJS 构建的形状 (只有 default 导出时是 default 本身) |
+| `beyond.mjs` | 模板之外的序列：读插件源码提出的组合 (服务交接、故障后重启、连续重启、事件分发、非默认配置)，各带预测与对照，用同一套判据判三次 |
 | `fixtures/` | 自测用的小插件：leaky (故障注入下泄漏)、stale (提供者重启后丢登记) 应被抓到，tidy 应判干净 |
 
 ## 动作与观察

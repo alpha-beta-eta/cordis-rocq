@@ -14,6 +14,8 @@ for (const e of JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))) {
   if (e.op === 'proc') bits.push(`globalThis ${e.globals.length} 个键, dns ${e.dns}, exit×${e.listeners.exit} beforeExit×${e.listeners.beforeExit}, Timeout×${e.handles.Timeout ?? 0} (对照用 out.json)`)
   if (e.op === 'sections') bits.push(e.names.join(', ') || '(无)')
   if (e.op === 'squatSection' || e.op === 'unsquatSection') bits.push(e.name)
+  if (e.op === 'indexInject') bits.push(`index-inject 行 ${e.rows} (表共 ${e.total} 行, 经 ${e.via})`)
+  if (e.op === 'config') bits.push(JSON.stringify(e.merge))
   if (e.note) bits.push(e.note)
   if (e.op === 'epoch') bits.push(`${e.id} epoch=${e.epoch} inject=[${(e.inject ?? []).join(',')}]`)
   if (e.services) bits.push(`${e.services.length} 个服务 (完整数据见 out.json)`)

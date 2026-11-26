@@ -1,10 +1,12 @@
 # dsh 热门插件的生命周期问题：cordis-check 报告
 
-2026-11-25
+2026-11-25，11-26 补"模板之外的序列"
 
 ## 摘要
 
 我们做了一个检查工具 cordis-check，把 npm 上下载量最高的 26 个第三方 dsh 插件放在真实的 Cordis 上运行，自动找出违反汇总定理的最短调用序列。它在 16 个插件上找到 50 个见证，每个都能重放复现。各类见证都拿到真实的 dsh 宿主 (发布版 0.2.2-rc.5) 上，用真实的触发方式检查过。主要问题全部复现，3 处判为桩造成的误报。
+
+固定场景之外，我们又读插件源码，提出 5 组枚举模板表达不了的组合 (服务交接、故障后重启、连续重启、事件分发、非默认配置)，在 checker 上判定后全部拿到真实宿主上复现。其中两组是新问题。
 
 主要发现：
 
@@ -12,8 +14,9 @@
 - **两个插件正常卸载就泄漏。** dsh-windows-mcp 丢弃了 6 个路由登记的返回值；dsh-mobile-plugin 给每个路径挂的分派器在卸载时从不撤销，留下 286 条路由和 2 条升级路由。停用后这些路由仍由旧实例应答，再启用时新实例全部撞名，没有任何报错。两者都在真实宿主上复现。
 - **服务重启一次，功能就静默消失。** dsh-free-search 在 systemPrompt 重启后只剩一个空壳 fiber (15 个缩成 1 个)，设置接口和工具全部消失；dsh-token-diet、ds-harness-remote 在 webServer 重启后丢掉 RPC 路由；dsh-remote 在 skills 重启后丢掉远端 skill provider。所有 fiber 仍是 ACTIVE，不报错，只有重启插件才恢复。全部在真实宿主上复现。
 - **dsh-free-search 会把设置写入接口让给别的插件。** 撞名时它吞掉错误并"复用"已有登记，于是 `/mutate` 由占住这条路径的插件应答，它自己毫无察觉。
-- **8 个插件卸载后留下进程级状态**：dns 解析序、`globalThis` 上的槽、`process` 监听器。dsh-prime-memory 的 `beforeExit` 监听器每重装或重启一次就多一个。7 个在真实宿主上复现。
-- **两个插件争同一个服务名 `dshRemote`**，输的一方只打一条警告就继续运行。冲突在真实宿主上复现。checker 预测的"结果依赖安装次序"没有出现，因为异步延迟让 dsh-remote 总是赢。
+- **8 个插件卸载后留下进程级状态**：dns 解析序、`globalThis` 上的槽、`process` 监听器。dsh-prime-memory 的 `beforeExit` 监听器每重装一次就多一个，它 inject 的任一服务每重启一次也多一个：真实宿主上 webServer、tools 各重启三次，从 1 个涨到 7 个。7 个插件在真实宿主上复现。
+- **两个插件争同一个服务名 `dshRemote`**，输的一方只打一条警告就继续运行。冲突在真实宿主上复现。checker 预测的"结果依赖安装次序"没有出现，因为异步延迟让 dsh-remote 总是赢。更直接的后果是：停用赢家之后，`dshRemote` 就无人提供，仍在运行的另一个插件不会接手，直到它自己重启 (新)。
+- **中途失败之后重启服务，插件反而一条路由都不剩 (新)。** A 类的 5 个插件撞名失败后，重启 webServer 确实清掉了泄漏的路由，但失败的 fiber 不会随服务重新出现而重跑：插件的路由从 1 条泄漏变成 0 条，表上只留一条早已过时的撞名错误。只有重启插件本身才恢复。
 
 这些问题集中在少数几种写法上，正好对应定理的几条前提：先做效应、后登记逆 (R1)；apply 时读一次没有 inject 的服务 (C2)；服务名与路由撞名时不拒绝 (R3)。宿主侧两处改动就能消除第一类问题的根源，见"建议"。
 
@@ -78,6 +81,8 @@ flowchart LR
 - 每条序列在单独的进程里跑，网络、子进程、`process.kill` 一律拦下。
 
 **真实宿主复现。** 用 npm 发布版 dsh 0.2.2-rc.5，把插件和一个驱动插件装进全新的 profile。驱动插件通过 loader 停用、启用插件与服务提供者，发真实的 HTTP 请求，按处理器函数的身份区分新旧实例，并在宿主进程里读进程级状态。它不打补丁：需要故障时，先占住插件要登记的一条路由或一个提示段名；需要服务晚到或重启时，停用再启用提供它的 loader 条目。宿主跑在只有回环接口的网络命名空间里。工具与场景见 [real/](real/)。
+
+**模板之外的序列。** 五种场景都只含单一动作，组合 (例如故障之后再重启服务) 与事件分发、非默认配置都不在枚举里。这一部分改为读插件源码与定理前提，先写下预测，再把序列交给 checker 执行，判据与稳定性门槛不变 ([beyond.mjs](beyond.mjs))，最后在真实宿主上复现。序列只用演算里的动作：install、dispose、provide、withdraw、fault、emit，外加条目配置。这一步由 LLM 完成，但提出时已经读过本报告，所以它示范的是这条路线可行，而不是度量 LLM 能独立找到多少问题。
 
 ## 结果总览
 
@@ -213,15 +218,42 @@ ds-harness-remote 与 dsh-remote 都 `ctx.provide('dshRemote')`。输的一方�
 
 这一类对应审计中 C2 与 R3 的主体：插件在启动时读一次未注入的服务，按它在不在决定登记什么，之后不再响应它的出现。模型中的可选依赖扩展 (`theories/Ext/Optional.v`) 正是为这种需求设计的。
 
+## 模板之外的序列
+
+五组序列各写下了读源码得出的预测，checker 上每条判三次结果一致，真实宿主上全部复现。逐步记录见 [FINDINGS.md](FINDINGS.md) 的同名一节。
+
+| 组 | 序列 | 结果 | 新问题 |
+| --- | --- | --- | --- |
+| P1 服务交接 | ds-harness-remote 与 dsh-remote 同装，停用赢家 | `dshRemote` 无人提供，另一个插件全部 fiber ACTIVE 却不接手；重启它才拿到 | 是 |
+| P2 故障后重启 | 撞名让插件中途失败，再重启 webServer | 5 个 A 类插件都从"泄漏 1 条"变成"0 条"，失败的 fiber 不重跑；重启插件才恢复 | 是 |
+| P3 连续重启 | 重启服务 3 次 | dshmarket 每次多一个 fiber (4→7)；prime-memory 的 `beforeExit` 随 webServer 与 tools 的每次重启加一 (1→7)；session-superagent 不变 | 累积的范围比原来记的大 |
+| P4 事件分发 | whale-widget 的 index-inject 行：装上、卸载、webServer 缺席 | 1、0、1 行 | 否，原来"走不到"的一项现在走到了 |
+| P5 非默认配置 | 打开 prime-memory 默认封印的三组工具，热更新与重启 | 多登记 13 个工具，卸载全部撤掉 | 否，覆盖面扩大 |
+
+**P1：交接失败。** 两个插件的 `provide('dshRemote')` 都包在 try/catch 里。dsh-remote 失败后不再尝试；ds-harness-remote 只在用户改设置触发 `replaceServer` 时重试 (`dist/index.js:113054`)。所以服务名一旦被别人占着，就算对方后来离开，也不会去接手。这是 R3 与 C2 同时被违反：冲突没在插入时拒绝，插件按服务在不在决定行为之后，不再响应它的变化。在模型里，O-Dispose 赢家之后的落定状态应当与"只装输家"相同，实际上不同。
+
+**P2：重启清掉了泄漏，也清掉了插件。** Cordis 的 fiber 一旦失败，只能经 `update()` 清掉错误后恢复，inject 的服务换了实例也不会让它重跑 (`.vendor/cordis/fiber.ts:633`)。这与模型一致：Progress.v 定义的"稳定"里，失败的 fiber 停在 Inactive。所以这不违反前提，而是 A 类后果的另一面：
+
+| 时刻 (whale-widget) | 内层 fiber | `/dsh-whale*` 路由 |
+| --- | --- | --- |
+| 装上后 | ACTIVE | 26 |
+| 一条路径被占时启用 | FAILED (撞名) | 1 条泄漏 |
+| 重启 webServer 后 | **仍 FAILED，错误仍是那次撞名** | **0** |
+| 重启插件后 | ACTIVE | 26 |
+
+撞名的原因已经随旧表一起消失，插件却不会自己再试。dshmarket、dsh-remote、connect-workbuddy、qqbot 的四步结果相同。在贡献键宿主上 (E6f) 撞名不再失败，这条序列也就不再触发；其他原因造成的失败仍会这样。
+
+**P3：累积的不只是重装。** prime-memory 每次 apply 都加一个 `beforeExit` 监听器。它 inject 的服务 (webServer、tools，以及经级联到达的服务) 任何一个重启都会让 apply 重跑，于是宿主里的每次服务重启都在加。dshmarket 的 fiber 累积原来只在真实宿主上看到，这次在 checker 里也判出来了。
+
 ## 与人工审计的对照
 
-checker 复现了审计的主要判定，补出了审计漏记的同类问题，也有 3 处走不到。
+checker 复现了审计的主要判定，补出了审计漏记的同类问题，也有 3 处走不到 (其中 index-inject 一处后来由 P4 部分走到)。
 
 | | 内容 |
 | --- | --- |
 | 复现 | whale-widget 的 R1 与 dns；windows-mcp 的路由泄漏；session-superagent 的 `globalThis`；`dshRemote` 撞名；token-diet 的 C2；dshmarket"缺口只在中途抛错" |
-| 补充 | 每个 R1 问题的具体故障点与残留条数；"从此装不回去"这一后果；dsh-remote、free-search、connect-workbuddy、qqbot、mobile-plugin 的同类 R1；dsh-ops 的提示段序号；free-search 让出路由；提供者重启后的静默失效 (free-search、token-diet、ds-harness-remote、dsh-remote、dshmarket)；cost-meter、ds-harness-remote、mobile-plugin 的 `globalThis` 槽；prime-memory、dsh-im 的进程级残留 |
-| 走不到 | dsh-im 与 dsh-qqbot 的 `approval/request` 中间件次序 (要等 IM 通道真正连上)；cost-meter 对 `ChildProcess.prototype.spawn` 的常驻补丁 (排在一次失败的 typert 注册之后)；whale-widget 的 index-inject 行 (只在桌面端宿主上出现) |
+| 补充 | 每个 R1 问题的具体故障点与残留条数；"从此装不回去"这一后果；dsh-remote、free-search、connect-workbuddy、qqbot、mobile-plugin 的同类 R1；dsh-ops 的提示段序号；free-search 让出路由；提供者重启后的静默失效 (free-search、token-diet、ds-harness-remote、dsh-remote、dshmarket)；cost-meter、ds-harness-remote、mobile-plugin 的 `globalThis` 槽；prime-memory、dsh-im 的进程级残留；模板之外的 `dshRemote` 交接失败、故障后重启的静默失效 |
+| 走不到 | dsh-im 与 dsh-qqbot 的 `approval/request` 中间件次序 (要等 IM 通道真正连上)；cost-meter 对 `ChildProcess.prototype.spawn` 的常驻补丁 (排在一次失败的 typert 注册之后)；whale-widget 的 index-inject 行在桌面端外壳里的一次性缓存 (P4 已确认宿主这一侧是干净的) |
 
 审计与 checker 的分工很自然：审计读源码，能看到所有分支；checker 只看到实际跑到的分支，但给出的是可以拿给插件作者重放的序列。
 
@@ -233,6 +265,7 @@ checker 复现了审计的主要判定，补出了审计漏记的同类问题，
   - dsh-mobile-plugin 的两个重启见证，在 checker 里就时稳时不稳，真实宿主上不复现，见证保留备查。
 - **依赖图来自一个版本。** 级联重启用的依赖图是从发布版 0.2.2-rc.5 读出的，宿主升级后应重新生成。checker 只按服务重启，不模拟一个 loader 条目同时提供几个服务的情形。
 - **落定有上限。** 每步最多等 2 秒让 fiber 走出 LOADING，更慢的仍判无结论。dsh-mobile-plugin 在满载的并行池里结果抖动，它的见证以单独运行为准。
+- **模板之外的序列不是盲测。** P1–P5 是在读过本报告之后提出的，选题受到已知问题的引导；5 组中两组发现新问题，不能据此估计这条路线的命中率。它们也只有 15 条，是手写的，不是搜索出来的。
 - **欠近似。** 没有见证不等于没有问题。故障点按调用次数穷举，服务晚到与重启只试单个服务，安装次序只试两两。dsh-cost-meter、dsh-free-search 只部分激活，dsh-mnemon 没有激活，checker 只覆盖了它们走得到的那一段。
 - **真实宿主的版本。** checker 用的是 dsh 源码 `fcc0ad46` (2026-11-04)，真实宿主用的是发布版 0.2.2-rc.5 (2026-11-18)。本报告涉及的宿主语义 (裸 disposer、撞名抛错、重跑 apply 复用 ctx) 在两者中一致。
 - **只看宿主端。** 浏览器客户端部分未覆盖。
@@ -245,7 +278,9 @@ checker 复现了审计的主要判定，补出了审计漏记的同类问题，
 - dsh-remote 用 `ctx.inject(['skills'], …)` 代替 apply 时的一次 `ctx.get`；
 - token-diet、ds-harness-remote 声明 inject `webServer` (或把退路放进 `ctx.inject(['webServer'], …)`)，这样 `rpc.handle` 能用，退路也会随 webServer 重新登记；
 - dsh-free-search 去掉 apply 的重入保护，或者至少不按 ctx 判断"已经跑过"；撞名时应拒绝启动，而不是"复用"别人的路由；
-- dsh-mobile-plugin 在 `detach()` 里撤掉分派器。
+- dsh-mobile-plugin 在 `detach()` 里撤掉分派器；
+- ds-harness-remote 与 dsh-remote 不要吞掉 `provide` 的冲突，让启动显式失败，用户才知道两者只能启用一个。监听 `internal/service` 等名字空出来再重试也能修好交接，但那是元层钩子，本身就越出模型；
+- dsh-prime-memory 把 `beforeExit` 监听器放进 `ctx.effect`，卸载或重跑 apply 时摘掉。
 
 可以给相关插件分别提 issue，附上真实宿主上的复现步骤。这是对外的动作，需要先确认。
 
@@ -256,12 +291,14 @@ checker 复现了审计的主要判定，补出了审计漏记的同类问题，
 
 这两条在 checker 与真实宿主上都验证过 ([../docs/CONTRIB.md](../docs/CONTRIB.md) 的 E6e、E6f)：插件代码不动，checker 的 50 个见证降到 39 个，路由泄漏全部消失，其余类别原样保留；真实宿主上只改 webserver 一个文件，A 类 5 个插件、windows-mcp 与 dsh-mobile-plugin 的泄漏都不再出现，free-search 的撞名变成显式的 409。
 
-服务名冲突应在插入时拒绝，而不是由插件吞错后继续运行 (`dshRemote` 一例)。fiber 因依赖重启而重跑 apply 时，宿主可以给一个新的 ctx，或者在文档里写明会复用 ctx。
+服务名冲突应在插入时拒绝，而不是由插件吞错后继续运行 (`dshRemote` 一例，P1 说明吞错之后连交接都不会发生)。fiber 因依赖重启而重跑 apply 时，宿主可以给一个新的 ctx，或者在文档里写明会复用 ctx。
+
+失败的 fiber 不随依赖重跑 (P2)，这是 Cordis 有意的设计，与模型一致，不必改。但失败应当让用户看得见：现在插件条目在 loader 里仍是启用状态，外层 fiber ACTIVE，只有日志里有一条启动时的错误。宿主可以在插件列表里标出含失败 fiber 的条目，并提供一键重启。
 
 **checker 本身。**
 
 - 在宿主桩上实现上面两处宿主改动，插件代码不动，重跑全部场景，看 A 类与 A′ 类的见证是否全部消失；再在真实宿主上验证。这能直接检验"定理推出的修法消除整类问题"。
 - 给 typert 与 IM 通道写专门的桩，走到 cost-meter 的原型补丁与 `approval/request` 的次序问题。
-- 增加自由搜索与最短化，覆盖五种固定场景以外的序列。
+- 增加自由搜索与最短化，覆盖五种固定场景以外的序列。P1–P5 是手写的第一步：读源码提出候选，判据不变。下一步是让候选的提出可重复，并且不先读已知结论，这样才能度量它比枚举多找到多少。
 
-**论文。** 这次的结果可以作为论文实证部分的骨架：定理给出前提与保证，人工审计给出前提在真实插件中的分布，checker 给出违反前提的具体后果，真实宿主复现给出端到端的证据。通用桩改变异步时序、级联重启改变结论两事，也值得在"威胁有效性"一节讨论。
+**论文。** 这次的结果可以作为论文实证部分的骨架：定理给出前提与保证，人工审计给出前提在真实插件中的分布，checker 给出违反前提的具体后果，真实宿主复现给出端到端的证据。模板之外的序列说明，前提可以直接用来设计测试：读一段代码，指出它违反哪一条前提，再按定理预测哪一种组合会暴露它。P1 与 P2 都是这样找到的。通用桩改变异步时序、级联重启改变结论两事，也值得在"威胁有效性"一节讨论。

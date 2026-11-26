@@ -1,0 +1,127 @@
+[
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "装上后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-market",
+  "label": "装上后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "装上后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "squat",
+  "path": "/dsh-market/telemetry"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-market",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "撞名后启用"
+ },
+ {
+  "op": "disable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "webserver"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-market",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "get",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "重启 webServer 后"
+ },
+ {
+  "op": "disable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "enable",
+  "id": "dsh-market"
+ },
+ {
+  "op": "settle"
+ },
+ {
+  "op": "wait",
+  "ms": 3000
+ },
+ {
+  "op": "fibers",
+  "id": "dsh-market",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "routes",
+  "prefix": "/dsh-market",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "route",
+  "path": "/dsh-market/telemetry/opened",
+  "label": "再重启插件后"
+ },
+ {
+  "op": "done"
+ }
+]

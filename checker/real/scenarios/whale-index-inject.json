@@ -1,0 +1,17 @@
+[
+ { "op": "settle" },
+ { "op": "indexInject", "match": "/dsh-whale/widget.js", "label": "装上后" },
+ { "op": "disable", "id": "dsh-whale-widget" },
+ { "op": "settle" },
+ { "op": "indexInject", "match": "/dsh-whale/widget.js", "label": "停用后" },
+ { "op": "disable", "id": "webserver" },
+ { "op": "settle" },
+ { "op": "enable", "id": "dsh-whale-widget" },
+ { "op": "settle" },
+ { "op": "fibers", "id": "dsh-whale-widget", "label": "webServer 缺席时启用" },
+ { "op": "indexInject", "match": "/dsh-whale/widget.js", "label": "webServer 缺席时启用" },
+ { "op": "enable", "id": "webserver" },
+ { "op": "settle" },
+ { "op": "indexInject", "match": "/dsh-whale/widget.js", "label": "webServer 回来后" },
+ { "op": "done" }
+]
