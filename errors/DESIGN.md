@@ -121,7 +121,21 @@
    `NoFailed`，`final_fiber` 允许任意错误标记；`state_confluence` 改写为以控制层的一致为前提的 `state_agree`。
    `vstate_confluence` 与 `vconfluence_failures` 合起来：两次执行终态中每个绑定的服务状态 ≃。
 
-   **还没做的。** 含 spawn 的版本（核心第 3 层，`SpawnConf.v`）；与编排交错的版本（核心 `Dynamic.v`）。
+   **含 spawn（已完成，`SpawnConfF.v`，义务 A）。** spawn 冲突导致的失败由调度决定（两个父 fiber 是否同时
+   在场），所以需要一条关于 spawn 的义务。先取最简单的义务 A：spawn 出的组件不提供任何键，于是 `PSpawn`
+   永远不会冲突，spawn 不再是失败的来源。为此 `FailCrux.v` 的义务从"不 spawn"放宽为 A（`HSpawnNP`），
+   跨两次执行的不含 spawn 部分移到 `FailConf.v`。`SpawnConfF.v` 复制核心 `SpawnConf.v`：
+
+   - `Final` 取自 `StateConfF.v`（不要求 `NoFailed`）；
+   - 沿规范名的对应（`Corresp`）多一项"失败与否相同"；归纳步 `corr_pair` 按 `failed_same` 的办法把 fiber 分成
+     无 target、Active（理想轨迹走到 `Done`）、失败（理想轨迹失败）三类，两次执行中它看到同样的初始状态，
+     所以类别相同；
+   - `final_agree`：根对应的两个终态在重命名意义下一致，失败的 fiber 也对应（`AgreeL` 多一项）；
+   - `vspawn_confluence`：从可达状态出发、只走生命周期步（含 `VClear`）、终于 quiet 的两次执行在重命名意义下
+     一致。`VClear` 即 `O-Reset`，补证了它保持 `SLInv` 与根 fiber（`sl_oreset`、`rk_oreset`）。
+
+   **还没做的。** 把义务 A 放宽到精确的义务 B（提供键的子组件有唯一的 spawn 位置等）；与编排交错的版本
+   （核心 `Dynamic.v`）。
 
 ## 2. Cordis 的现状（证据）
 
@@ -363,6 +377,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
 | `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 第 3 节第 2 层：每种失败都是理想失败（FailCrux，义务：spawn 出的组件不提供键）；失败集合相同、合流包含失败（FailConf，不含 spawn） | 完成 |
 | `theories/StateConfF.v` | 第 3 节：合流包含失败，服务状态 ≃ | 完成 |
+| `theories/SpawnConfF.v` | 第 3 节：合流包含失败，含 spawn（义务 A：spawn 出的组件不提供键） | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
 | `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |
 | `theories/Resource.v` | 5.3 | 完成 |
