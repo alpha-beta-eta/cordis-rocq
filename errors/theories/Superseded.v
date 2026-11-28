@@ -4,9 +4,11 @@
     [L-Step] (an iteration in flight lands), so when its next instruction
     fails, both [L-Step] (ending [Inactive (Some ξ)]) and [L-Divert]
     (ending [Inactive None]) apply, and which one happens is up to the
-    schedule. Cordis always takes the second: a load whose epoch has
-    changed is cleaned up but "cannot fail the new target"
-    (cordis [fiber.ts:466]).
+    schedule. The load was for a view that is no longer the target, so its
+    failure says nothing about the current target; recording it makes the
+    outcome depend on the schedule (principle P1). (Cordis makes the same
+    choice: a load whose epoch has changed "cannot fail the new target",
+    cordis [fiber.ts:466].)
 
     [sstep] is [step] with that choice made: a failing [L-Step] on a fiber
     whose target has turned is the [L-Divert] step instead. It changes

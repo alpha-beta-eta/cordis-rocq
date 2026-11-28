@@ -8,8 +8,10 @@
 
     [astep] is the core with Cordis's choice: [O-Insert] admits any
     component, and the core's own [PProvide] check (the key is already
-    bound) fails the load with [EConflict]. This is the [fail] variant of
-    section 4.2; the [wait] variant is future work.
+    bound) fails the load with [EConflict]. It is not a proposed design:
+    it is here to show what goes wrong. The design of section 4.2 keeps
+    the static check and queues a component whose only conflicts are with
+    retired fibers (future work, [Queue.v]).
 
     The file contains no theorem about [astep] in general, only the
     counterexample of cordiverse/cordis#358, computed on the example of

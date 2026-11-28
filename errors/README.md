@@ -2,6 +2,9 @@
 
 设计见 [DESIGN.md](DESIGN.md)。
 
+目标是一个自足的演算，规则按原则取舍（DESIGN.md 0.2 节），不照搬 Cordis；Cordis 的现状是证据，
+不同之处整理成给 Cordis 的建议（DESIGN.md 第 6 节）。
+
 本目录与现有形式化隔离：
 
 - 代码放在 `errors/theories/`，逻辑名 `CordisErr`，可以 import 核心（`Cordis.*`），核心与
@@ -9,8 +12,8 @@
 - 有自己的 `_CoqProject` 与 `build.sh`，根目录的构建不变；
 - 每个模块给出对核心的保守性定理。
 
-要处理的三类错误：外部失败（`apply` 中 await 的 IO 抛错）、接纳冲突（差异 c，
-[cordiverse/cordis#358](https://github.com/cordiverse/cordis/issues/358)）、disposer 失败（差异 f）。
+要处理的错误：调度决定的失败、外部失败、暂时的接纳冲突
+（[cordiverse/cordis#358](https://github.com/cordiverse/cordis/issues/358) 是 Cordis 中的例子）、逆的失败。
 
 ## 构建
 
@@ -25,4 +28,5 @@ sh errors/build.sh
 | 文件 | 内容 | 状态 |
 |---|---|---|
 | `theories/Superseded.v` | 4.0：过时的加载不记失败；核心的精化，安全性、进展、终止直接搬过来 | 完成 |
-| `theories/Admit.v` | 4.2：`O-Insert` 不检查冲突（Cordis 现状），#358 的两次执行 | `fail` 变体与反例完成 |
+| `theories/Admit.v` | 4.2 的反例：Cordis 的做法（`O-Insert` 不检查冲突）下 #358 的两次执行 | 完成 |
+| `theories/Queue.v` | 4.2：与已退役 fiber 冲突时排队 | 待做 |
