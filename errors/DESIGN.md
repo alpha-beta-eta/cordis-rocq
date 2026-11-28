@@ -150,7 +150,17 @@
    - `vspawn_confluence`：从可达状态出发、只走生命周期步（含 `VClear`）、终于 quiet 的两次执行在重命名意义下
      一致。`VClear` 即 `O-Reset`，补证了它保持 `SLInv` 与根 fiber（`sl_oreset`、`rk_oreset`）。
 
-   **还没做的。** 与编排交错的版本（核心 `Dynamic.v`）。
+   **与编排交错（已完成，`DynamicF.v`）。** 对应核心 `Dynamic.v`（论文定理 80）。执行 `DRunV` 允许生命周期步与
+   `VClear` 出现在任何位置，编排输入（插入、dispose、restart、reset）按顺序出现。核心的根账本 `Ledger` 与各条
+   编排引理原样复用，补证 `VClear` 保持账本（`ledger_oreset`）；核心不变式沿执行保持（`drunv_inv`），执行也是
+   一串标签的运行（`drunv_vrun`），于是可以套用 `FailCrux.v` 对 quiet 状态的刻画。终态的根按账本读出，不再需要
+   `NoFailed`（`final_root`、`ledger_rootinj`、`ledger_match`）。结论：
+   - `vdynamic_agree`：两次从初始状态出发的执行，若输入留下的存活组件相同、顺序相同，且只插入可插入的组件，
+     则 quiet 终态在重命名意义下一致，失败的 fiber 也对应；
+   - `vdynamic_confluence`：相同输入、任意交错（定理 80(2)）；
+   - `vstatic_assembly`：任何历史的 quiet 终态都与"只按顺序插入存活组件各一次"的执行一致（定理 80(1)）。
+
+   至此，核心的合流在三个层面（控制状态、服务状态、含 spawn 与编排交错）都有了包含失败的版本。
 
 ## 2. Cordis 的现状（证据）
 
@@ -393,6 +403,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 第 3 节第 2 层：每种失败都是理想失败（FailCrux，spawn 义务 B）；失败集合相同、合流包含失败（FailConf，不含 spawn） | 完成 |
 | `theories/StateConfF.v` | 第 3 节：合流包含失败，服务状态 ≃ | 完成 |
 | `theories/SpawnConfF.v` | 第 3 节：合流包含失败，含 spawn（义务 B） | 完成 |
+| `theories/DynamicF.v` | 第 3 节：合流包含失败，与编排交错；静态组装（定理 80） | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
 | `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |
 | `theories/Resource.v` | 5.3 | 完成 |

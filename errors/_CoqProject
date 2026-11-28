@@ -15,3 +15,4 @@ theories/Resource.v
 theories/AsyncKind.v
 theories/StateConfF.v
 theories/SpawnConfF.v
+theories/DynamicF.v
