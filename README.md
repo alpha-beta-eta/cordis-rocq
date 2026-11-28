@@ -26,6 +26,9 @@ of dsh plugins; plugins' business logic is out of scope.
   replayed on `step` extracted from `Calculus.v`, and the states are compared. About 270 000 orchestration
   scripts; the only divergences are differences c (insert-time conflicts) and e (concurrent disposers),
   each with a three-step witness. A first step toward the refinement of DESIGN D6.
+- [keys/](keys/): hygiene for keys (design only so far): a provided service is private to the
+  provider's subtree, scoped by instance, unless exported; an exported name with several providers
+  resolves like a contribution key, so a conflict is a value, not a failure.
 - [errors/](errors/): error handling brought into the model, kept apart from the formalization above
   (own build, `errors/build.sh`): failures scoped to their view (done: safety, progress, termination under a new measure, and confluence that includes failed fibers, with spawn under a static obligation that makes spawns never conflict, and under interleaved orchestration with static assembly, under a new obligation that operations which may meet do not reject each other), an admission queue for conflicts with retired fibers (done), a superseded load does not fail (done: a refinement of the core,
   so safety, progress and termination carry over), insert-time conflicts (the cordiverse/cordis#358

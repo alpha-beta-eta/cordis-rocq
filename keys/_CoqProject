@@ -1,0 +1,11 @@
+-Q ../theories Cordis
+-Q theories CordisKeys
+
+theories/Scoped.v
+theories/ScopedSafety.v
+theories/ScopedTerm.v
+theories/ScopedProgress.v
+theories/ScopedConf.v
+theories/ScopedSpawn.v
+theories/ScopedDynamic.v
+theories/Examples.v
