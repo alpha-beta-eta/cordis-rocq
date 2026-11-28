@@ -1,0 +1,5 @@
+-Q ../theories Cordis
+-Q theories CordisErr
+
+theories/Superseded.v
+theories/Admit.v

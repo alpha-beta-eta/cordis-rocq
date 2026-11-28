@@ -27,8 +27,10 @@ of dsh plugins; plugins' business logic is out of scope.
   scripts; the only divergences are differences c (insert-time conflicts) and e (concurrent disposers),
   each with a three-step witness. A first step toward the refinement of DESIGN D6.
 - [errors/](errors/): error handling brought into the model, kept apart from the formalization above
-  (design only so far): failures yielding to diverts, external failures, insert-time conflicts
-  (cordiverse/cordis#358), disposer failures, and which failures confluence can include.
+  (own build, `errors/build.sh`): a superseded load does not fail (done: a refinement of the core,
+  so safety, progress and termination carry over), insert-time conflicts (the cordiverse/cordis#358
+  counterexample, computed), and in design: external failures, disposer failures, and which failures
+  confluence can include.
 - [layers/](layers/): the calculus presented in seven Racket layers (services, lifecycle,
   dependencies, confluence, spawn, reactions, orchestration), each a self-contained file that
   adds one concept, with runnable checks of what the layer earns and diffs between layers.

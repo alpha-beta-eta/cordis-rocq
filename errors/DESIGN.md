@@ -136,7 +136,7 @@ epoch ≠ INACTIVE → ACTIVE、否则 PENDING 的顺序算出（`fiber.ts:365-3
 
 ## 4. 模块
 
-### 4.0 失败让位于转向（`Yield.v`）
+### 4.0 过时的加载不记失败（`Superseded.v`，已完成）
 
 **规则。** 加载中的 fiber 在 target 已经转向时走到失败（`PFail`、操作被拒、provide 冲突、4.1 的外部失败），
 不记错误标记，按 `L-Divert` 进入 `Unloading acc w None`。这就是 Cordis 的行为（2.2 节第一条）。
@@ -150,6 +150,20 @@ epoch ≠ INACTIVE → ACTIVE、否则 PENDING 的顺序算出（`fiber.ts:365-3
    失败与否由理想轨迹决定。这是第 3 节"合流包含程序决定的失败"的第一块。
 
 这一模块最小，而且只是在核心的执行中挑出一部分，适合作为起点。
+
+**完成情况。** `Superseded.v`，约 270 行，没有新公理：
+
+| 结论 | 名字 |
+|---|---|
+| 每个 `sstep` 都是核心的一步，标签相同，或以 `LDivert n` 代替 `LStep n` | `sstep_core` |
+| 每个 `sstep` 执行都是核心的执行；核心保持的性质 `sstep` 也保持 | `srun_core`、`sinv_step` |
+| 安全性 | `swf_reachable` |
+| 两者在同样的标签上可走，静止相同；进展 | `sstep_some`、`squiet_iff`、`sprogress_reachable` |
+| 终止 | `stermination`、`stermination_reachable` |
+| 加载以失败结束，只发生在 target 仍是这次加载承诺的视图时 | `sfail_current` |
+
+上面第 2 条的"当且仅当"只证了一个方向（失败蕴涵 target 未变）；"按理想轨迹走到失败"那一半留给第 3 节，
+与 `Episode.v` 的理想轨迹一起做。
 
 ### 4.1 外部读取与外部失败（`Async.v`）
 
@@ -208,8 +222,13 @@ Unloading（restart、依赖变化导致的 divert）时，它卸载完会重新
 
 **要证的。**
 
-1. **`fail` 的反例**：把 #358 的三步序列（插入 P、插入依赖者 D、dispose P 之后不等落定再插入 P）写成
-   计算出来的两次执行，一次全部 Active，一次新的 P 停在 `Inactive (Some EConflict)`、D 停在 Inactive。
+1. **`fail` 的反例（已完成，`Admit.v`）**：把 #358 的序列（插入 P、插入依赖者 D、dispose P 之后不等落定
+   再插入 P）写成计算出来的两次执行，沿用 `Examples/Basic.v` 的登记表例子。编排输入相同，只有生命周期步
+   的先后不同：新 P 先加载时停在 `Inactive (Some EConflict)`，D 停在 Inactive，`tools` 未绑定，且两者都
+   不能再开始（`early_obs`、`early_stuck`）；旧 P 先被移除时全部 Active（`late_obs`）。同一时刻核心拒绝
+   这次插入（`core_refuses`）。`astep` 只是去掉 `O-Insert` 的冲突检查，冲突由核心原有的 `PProvide`
+   检查报出；核心允许的插入 `astep` 也允许（`astep_conservative`）。另外，新 P 的依赖为空、target 从未
+   改变，所以 4.0 的规则救不了它：这是接纳本身的问题，不是时机的问题。
 2. **`wait` 无死锁**：等待关系加进进展的论证。新 P 等旧 P 被移除，旧 P 等依赖者退出（`held`），
    依赖者等的是旧 P 的提供（不可见，不会开始加载）。需要说明等待关系沿秩无环；新 P 自己依赖旧 P
    提供的键时，它在 `L-Begin` 就停住，不会等在 `PProvide`。
@@ -261,7 +280,7 @@ Cordis 做不到（`Plugin.provide` 元数据不强制）。暂定在 `PProvide`
 
 | 模块 | 保持性、顺序 | 恢复 | 终止、进展 | 合流 |
 |---|---|---|---|---|
-| 4.0 失败让位于转向 | 核心的子集 | 核心的子集 | 核心的子集（进展要另看：删去一支后仍有步可走，因为 `L-Divert` 可走） | 第 3 节的第一块 |
+| 4.0 过时的加载不记失败 | 核心的子集（已证） | 核心的子集 | 核心的子集（已证；两者在同样的标签上可走） | 第 3 节的第一块 |
 | 4.1 外部读取 | 归约 | 归约 | 归约（不含外部 IO 的公平性） | 相对于加载的预言 |
 | 4.2 `fail` | 核心论证改写 | 同核心 | 同核心 | 反例 |
 | 4.2 `wait` | 核心论证改写 | 同核心 | 新的等待关系 | 在不冲突的编排输入下成立，并与推迟插入的核心执行对应 |
@@ -280,10 +299,10 @@ Cordis 做不到（`Plugin.provide` 元数据不强制）。暂定在 `PProvide`
 | 文件 | 内容 |
 |---|---|
 | `errors/_CoqProject`、`errors/build.sh` | 独立构建 |
-| `errors/theories/Yield.v` | 4.0：失败让位于转向，核心的精化 |
+| `errors/theories/Superseded.v` | 4.0：过时的加载不记失败，核心的精化（已完成） |
 | `errors/theories/Async.v` | 4.1：`EProg`、预言、展开、归约与保守性 |
 | `errors/theories/AsyncConf.v` | 4.1：相对于预言的合流 |
-| `errors/theories/Admit.v` | 4.2：两个变体的 step、#358 的计算执行 |
+| `errors/theories/Admit.v` | 4.2：`fail` 变体的 step、#358 的计算执行（已完成）；`wait` 变体待做 |
 | `errors/theories/AdmitLive.v` | 4.2：`wait` 的无死锁与合流 |
 | `errors/theories/UndoFail.v` | 4.3 |
 | `errors/theories/Classify.v` | 第 3 节：失败的分类与包含失败的合流 |
