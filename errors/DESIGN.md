@@ -282,8 +282,13 @@ target 从未改变，所以第 1 节的规则救不了它：这是接纳的问�
 程序判断（`spawn_unfold`、`above_eabove`）。`atermination` 与 `acontrol_confluence` 示范两条核心定理这样使用。
 合流说的是相同输入的执行，世界是输入之一：同一个世界下的两次运行结论一致。
 
-外部失败的错误标记目前展开为核心的 `EUser`；要区分（P4），需要给组件表加一个"这次失败是否来自外部"的
-判断，留作后续。
+**外部失败的归因（`AsyncKind.v`，已完成）。** 展开之后，外部拒绝与程序自己的 `EFail` 在核心状态里都是
+`EUser`。区分放在扩展程序的理想轨迹上做：`ETr` 是扩展程序的理想轨迹，成功的读取是一步（`XRead`），不产生
+别的事件；轨迹是确定的（`etr_det`），所以一条理想轨迹至多有一个失败点（`efail_unique`）；抹去读取之后，
+扩展轨迹就是展开后组件表的核心理想轨迹（`etr_tr`、`tr_etr`）。于是：一个组件在展开后的表中理想失败，当且
+仅当它的扩展轨迹停在被拒的读取、程序失败或操作失败上（`kinds_cover`），而且恰好是其中一种
+（`kinds_exclusive`）；种类只取决于 ρ 在依赖上的取值（`kind_ext`）。配合 `FailCrux.quiet_failed_ideal`，
+quiet 状态中每个失败的 fiber 都有唯一的失败种类，且在相同输入的每次运行中相同，运行时可以据此报告。
 
 ### 5.3 外部资源的释放失败（`Resource.v`，已完成）
 
@@ -350,6 +355,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
 | `theories/IdealFail.v`、`theories/FailCrux.v` | 第 3 节第 2 层：失败集合相同；合流包含失败（不含 spawn） | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
+| `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |
 | `theories/Resource.v` | 5.3 | 完成 |
 
 顺序：接纳队列 → 失败按视图记录与合流包含失败（主体）→ 确定的外部读取 → 资源释放失败。
