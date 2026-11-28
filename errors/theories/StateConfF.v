@@ -476,10 +476,16 @@ Section StateConfF.
                 HNoRej NoSpawn HProv vs0 vs1 vs2 ls0 H0 N0 R1 R2 Q1 Q2) as (_ & Hex & Hcomp & Hown).
     assert (Fin : forall vs, VLRun K_eq_dec Σ prog vs0 vs -> vquiet K_eq_dec Σ prog vs -> Final (vcore Σ vs)).
     { intros vs R Q.
-      destruct (vlrun_reach K_eq_dec Σ prog vs0 vs ls0 H0 N0 R) as (ls & H & N).
-      destruct (finv_reachable K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom
-                  HNoRej (fun c c' Hs => False_ind _ (NoSpawn c c' Hs)) HProv vs ls H N) as [P _].
-      split; [exact P|].
+      destruct (vlrun_reach K_eq_dec Σ prog (fun _ => true) vs0 vs ls0 H0 N0 (fun _ _ _ _ => eq_refl) R)
+        as (ls & H & N & _).
+      assert (G : forall ws0 ls ws, PInv (vcore Σ ws0) -> vrun_labels K_eq_dec Σ prog ws0 ls = Some ws ->
+                  NoReact ls -> PInv (vcore Σ ws)).
+      { intros ws0 ls1; revert ws0; induction ls1 as [|ℓ ls1 IH]; cbn; intros ws0 ws P0 Hr NR.
+        - injection Hr as <-; exact P0.
+        - destruct (ViewFail.vstep K_eq_dec Σ prog ws0 ℓ) as [ws1|] eqn:Hs; [|discriminate].
+          apply (IH ws1); [| exact Hr | intros ℓ' Hin; exact (NR ℓ' (or_intror Hin))].
+          exact (pinv_step _ _ _ (NR ℓ (or_introl eq_refl)) P0 (vstep_core K_eq_dec Σ prog ws0 ws1 ℓ Hs)). }
+      split; [exact (G (vinit Σ) ls vs pinv_init H N)|].
       exact (vquiet_settled K_eq_dec Σ prog Kb rank Rb Hrank Hbnd vs
                (cinv_vreach K_eq_dec Σ prog Kb HK Total NoSpawn vs ls H N) Q). }
     exact (state_agree _ _ (Fin vs1 R1 Q1) (Fin vs2 R2 Q2) Hex Hcomp Hown).

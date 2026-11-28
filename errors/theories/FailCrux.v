@@ -11,9 +11,11 @@
     alone does not give it: it allows a and b to reject each other in both
     orders, as two registrations of one name do.
 
-    With two static obligations ([NoSpawn]; [HProv]: a program provides
-    only declared keys, each at most once on a path), every way a load
-    step fails is an ideal failure ([load_fail_ideal]). Hence the failure
+    With static obligations ([HProv]: a program provides only declared
+    keys, each at most once on a path; obligation B on spawn, so that a
+    spawn never conflicts, with the invariant that root fibers run
+    insertable components, [RootInv]), every way a load step fails is an
+    ideal failure ([load_fail_ideal]). Hence the failure
     invariant [FailInv]: an Unloading fiber with an error, and a failed
     fiber under its recorded view, fail ideally; every step keeps it
     ([finv_step], [finv_reachable]). At a quiet reachable state a failed
@@ -275,11 +277,53 @@ Section FailCrux.
 
   (** ** Every way a load step fails is an ideal failure *)
 
-  (** Two static obligations, as in layer 1: components do not spawn, and a
-      program provides only declared keys, each at most once on a path. *)
-  Hypothesis HSpawnNP : forall c c', SpawnIn Σ c' (cbody c) -> cprovs c' = [].
+  (** Static obligations. A program provides only declared keys, each at
+      most once on a path ([HProv]). A spawn never conflicts (obligation B
+      of DESIGN.md section 3): a spawned component [c'] that provides keys
+      provides nothing another component provides ([HKidDisj]), is never
+      inserted by the orchestrator ([HKidRoot], with [rootb] the insertable
+      components), is spawned by one component only ([HKidUnique]), which
+      provides keys itself, so it has one fiber at a time ([HKidParent]),
+      and at most once on a path ([HKidOnce]). If spawned components
+      provide nothing, all of these hold. *)
   Hypothesis HProv : forall c ρ evs k s P, Tr c ρ evs (PProvide k s P) ->
     In k (cprovs c) /\ find_prov K_eq_dec Σ evs k = None.
+  Variable rootb : C -> bool.
+  Hypothesis HKidDisj : forall p c' d, SpawnIn Σ c' (cbody p) ->
+    overlaps K_eq_dec (cprovs c') (cprovs d) = true -> d = c'.
+  Hypothesis HKidRoot : forall p c', SpawnIn Σ c' (cbody p) -> rootb c' = true -> cprovs c' = [].
+  Hypothesis HKidUnique : forall p p' c', SpawnIn Σ c' (cbody p) -> Spawns Σ prog p' c' ->
+    cprovs c' <> [] -> p' = p.
+  Hypothesis HKidParent : forall p c', SpawnIn Σ c' (cbody p) -> cprovs c' <> [] -> cprovs p <> [].
+  Hypothesis HKidOnce : forall c ρ evs c' P, Tr c ρ evs (PSpawn c' P) -> cprovs c' <> [] ->
+    ~ In (TSpawn Σ c') evs.
+
+  (** Root fibers run insertable components. *)
+  Definition RootInv (γ : State) : Prop :=
+    forall m fm, fibers γ m = Some fm -> parent fm = None -> rootb (fcomp fm) = true.
+
+  Lemma corr_spawn (γ : State) c w acc evs m fm :
+    Corr K_eq_dec Σ prog γ c w acc evs -> In (USpawn Σ m) acc -> fibers γ m = Some fm ->
+    In (TSpawn Σ (fcomp fm)) evs.
+  Proof.
+    intros H; induction H as [|k p t g a acc evs H IH Ho Hr|k p s acc evs H IH Hi|m' c' acc evs H IH Hc];
+      intros Hin Hm; cbn in Hin.
+    - destruct Hin.
+    - destruct Hin as [E|Hin]; [discriminate | right; exact (IH Hin Hm)].
+    - destruct Hin as [E|Hin]; [discriminate | right; exact (IH Hin Hm)].
+    - destruct Hin as [E|Hin].
+      + injection E as ->; left; rewrite (Hc fm Hm); reflexivity.
+      + right; exact (IH Hin Hm).
+  Qed.
+
+  Lemma overlaps_nonnil l1 l2 : overlaps K_eq_dec l1 l2 = true -> l1 <> [].
+  Proof. intros H ->; discriminate. Qed.
+
+  Lemma overlaps_self l : l <> [] -> overlaps K_eq_dec l l = true.
+  Proof.
+    destruct l as [|k l]; [contradiction|]; intros _; cbn; unfold kmem; cbn.
+    unfold keqb; destruct (K_eq_dec k k); [reflexivity | contradiction].
+  Qed.
 
   Lemma corr_find_rev (γ : State) c w acc evs k s :
     Corr K_eq_dec Σ prog γ c w acc evs -> find_prov K_eq_dec Σ evs k = Some s ->
@@ -314,12 +358,12 @@ Section FailCrux.
   Qed.
 
   Theorem load_fail_ideal (γ : State) n f P acc w acc' w' z :
-    SInv γ -> EPInv γ -> fibers γ n = Some f -> life f = Loading Σ P acc w ->
+    SInv γ -> EPInv γ -> RootInv γ -> fibers γ n = Some f -> life f = Loading Σ P acc w ->
     fibers (load_step K_eq_dec Σ prog γ n f P acc w) n =
       Some (mkFiber Σ (fcomp f) (parent f) (disposed f) (Unloading Σ acc' w' (Some z))) ->
     IdealFails (fcomp f) (rho γ w).
   Proof.
-    intros SI EP Hn Hl H.
+    intros SI EP RI Hn Hl H.
     pose proof (sinv_wf γ SI) as W.
     pose proof (EP n f Hn) as Ef; rewrite Hl in Ef; destruct Ef as (evs & T & Co).
     assert (Rl : forall γ1 l, fibers (set_life Σ γ1 n f l) n =
@@ -363,15 +407,122 @@ Section FailCrux.
         congruence.
       + pose proof (wf_disjoint K_eq_dec Σ prog γ W (owner b) n fo f Neo Ho Hn) as D.
         unfold fprovs in D, Hko; rewrite (overlaps_true k _ _ Hko (In_kmem k _ Hkp)) in D; discriminate.
-    - (* a spawned component provides nothing, so a spawn never conflicts *)
-      assert (Hnp : cprovs c' = []).
-      { apply (HSpawnNP (fcomp f) c').
-        pose proof (proj1 (pv_fib Σ prog γ (sinv_prov γ SI) n f Hn) _ _ _ Hl) as Hsub.
+    - (* a spawn never conflicts (obligation B) *)
+      destruct (conflict K_eq_dec Σ prog γ c') eqn:Hcf;
+        [|cbn [load_step] in H; rewrite Hcf, Rl in H; discriminate].
+      exfalso.
+      assert (Hsp : SpawnIn Σ c' (cbody (fcomp f))).
+      { pose proof (proj1 (pv_fib Σ prog γ (sinv_prov γ SI) n f Hn) _ _ _ Hl) as Hsub.
         exact (SpawnIn_Sub Σ c' _ _ Hsub (spi_here Σ c' P')). }
-      assert (Hc : conflict K_eq_dec Σ prog γ c' = false).
-      { unfold conflict; induction (names Σ γ) as [|m l IH]; cbn; [reflexivity|].
-        rewrite IH, orb_false_r; destruct (fibers γ m); [|reflexivity]; rewrite Hnp; reflexivity. }
-      cbn [load_step] in H; rewrite Hc, Rl in H; discriminate.
+      unfold conflict in Hcf; apply existsb_exists in Hcf as (m & _ & Hm).
+      destruct (fibers γ m) as [fm|] eqn:Hfm; [|discriminate].
+      pose proof (HKidDisj _ _ _ Hsp Hm) as Ec.
+      pose proof (overlaps_nonnil _ _ Hm) as Hne.
+      destruct (parent fm) as [q|] eqn:Hp.
+      + destruct (wf_parent K_eq_dec Σ prog γ W m fm q Hfm Hp) as (fq & Hq & _ & Hin).
+        pose proof (i2_spawn Σ prog γ (t_inv2 K_eq_dec Σ prog Kb γ (c0_t K_eq_dec Σ prog Kb γ (s_c γ SI)))
+                      q fq m fm Hq Hin Hfm) as Hsq.
+        rewrite Ec in Hsq.
+        pose proof (HKidUnique _ _ _ Hsp Hsq Hne) as Eq.
+        pose proof (HKidParent _ _ Hsp Hne) as Hpne.
+        assert (Eqn : q = n).
+        { destruct (Nat.eq_dec q n) as [|Ne]; [assumption|exfalso].
+          pose proof (wf_disjoint K_eq_dec Σ prog γ W q n fq f Ne Hq Hn) as D; unfold fprovs in D.
+          rewrite Eq, (overlaps_self _ Hpne) in D; discriminate. }
+        subst q; rewrite Hn in Hq; injection Hq as <-; rewrite Hl in Hin; cbn in Hin.
+        pose proof (corr_spawn γ _ w acc evs m fm Co Hin Hfm) as Hev.
+        rewrite Ec in Hev.
+        exact (HKidOnce _ _ _ _ _ T Hne Hev).
+      + pose proof (RI m fm Hfm Hp) as Hr; rewrite Ec in Hr.
+        exact (Hne (HKidRoot _ _ Hsp Hr)).
+  Qed.
+
+  (** ** Root fibers keep running insertable components *)
+  Lemma load_step_fib (γ : State) n f P acc w m fm :
+    fibers (load_step K_eq_dec Σ prog γ n f P acc w) m = Some fm ->
+    fibers γ m = Some fm \/ (m = n /\ fcomp fm = fcomp f /\ parent fm = parent f) \/ parent fm = Some n.
+  Proof.
+    intros Hm; unfold load_step in Hm; destruct P; cbn zeta in Hm;
+      repeat match type of Hm with context [match ?x with _ => _ end] => destruct x end;
+      rewrite fibers_set_life in Hm; destruct (Nat.eqb_spec m n) as [->|];
+      try (injection Hm as <-; right; left; cbn; auto; fail);
+      cbn in Hm; try (left; exact Hm).
+    unfold fupd in Hm; destruct (Nat.eqb_spec m (next γ)); [injection Hm as <-; right; right; reflexivity|].
+    left; exact Hm.
+  Qed.
+
+  Lemma root_step (γ γ' : State) ℓ :
+    RootInv γ -> step γ ℓ = Some γ' -> (forall c, ℓ = OInsert c -> rootb c = true) -> RootInv γ'.
+  Proof.
+    intros RI H Hok m fm' Hm Hp.
+    assert (SL : forall γ1 n f (l : Life), fibers γ1 = fibers γ -> fibers γ n = Some f ->
+              fibers (set_life Σ γ1 n f l) m = Some fm' -> rootb (fcomp fm') = true).
+    { intros γ1 n f l E Hn Hm'; rewrite fibers_set_life in Hm'.
+      destruct (Nat.eqb_spec m n) as [->|].
+      - injection Hm' as <-; cbn in *; exact (RI n f Hn Hp).
+      - rewrite E in Hm'; exact (RI m fm' Hm' Hp). }
+    destruct ℓ as [c|n|n|n|n|n|n|n|n|n|n|n i|n]; cbn [step] in H.
+    - destruct (conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      cbn in Hm; unfold fupd in Hm; destruct (Nat.eqb_spec m (next γ)).
+      + injection Hm as <-; exact (Hok c eq_refl).
+      + exact (RI m fm' Hm Hp).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate]; injection H as <-.
+      unfold set_fiber, with_fibers, fupd in Hm; cbn in Hm.
+      destruct (Nat.eqb_spec m n) as [->|]; [injection Hm as <-; cbn in *; exact (RI n fn Hn Hp)|].
+      exact (RI m fm' Hm Hp).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [[z|]| | |]; try discriminate; injection H as <-.
+      exact (SL γ n fn _ eq_refl Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [[z|]| | |]; try discriminate.
+      destruct (target Σ prog γ n); [|discriminate]; injection H as <-.
+      exact (SL γ n fn _ eq_refl Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [|P acc w| |]; try discriminate.
+      destruct (may_step K_eq_dec Σ prog γ n P w); [|discriminate]; injection H as <-.
+      destruct (load_step_fib γ n fn P acc w m fm' Hm) as [H0|[(-> & Hc & Hpp)|Hpp]].
+      + exact (RI m fm' H0 Hp).
+      + rewrite Hc; rewrite Hp in Hpp; exact (RI n fn Hn (eq_sym Hpp)).
+      + congruence.
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [|P acc w| |]; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      exact (SL γ n fn _ eq_refl Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [| |acc w|]; try discriminate.
+      destruct (target_is K_eq_dec Σ prog γ n w); [discriminate|]; injection H as <-.
+      exact (SL γ n fn _ eq_refl Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [| | |[|u acc] w z]; try discriminate.
+      destruct (held Σ γ n (u :: acc)); [discriminate|].
+      destruct (undo_step_shape K_eq_dec Σ γ γ' n fn u acc w z H) as (γ1 & -> & E).
+      exact (SL γ1 n fn _ E Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [| | |[|[| |m'] acc] w z]; try discriminate.
+      destruct (fibers γ m') as [g|] eqn:Hg; [|discriminate].
+      destruct (held Σ γ n (USpawn Σ m' :: acc) || disposed g); [discriminate|]; injection H as <-.
+      unfold set_fiber, with_fibers, fupd in Hm; cbn in Hm.
+      destruct (Nat.eqb_spec m m') as [->|]; [injection Hm as <-; cbn in *; exact (RI m' g Hg Hp)|].
+      exact (RI m fm' Hm Hp).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [| | |[|u acc] w z]; try discriminate; injection H as <-.
+      exact (SL γ n fn _ eq_refl Hn Hm).
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn); try discriminate.
+      destruct (disposed fn && negb (has_child Σ γ n)); [|discriminate]; injection H as <-.
+      cbn in Hm; unfold fupd in Hm; destruct (Nat.eqb_spec m n); [discriminate | exact (RI m fm' Hm Hp)].
+    - destruct (fibers γ n) as [fn|] eqn:Hn; [|discriminate].
+      destruct (life fn) as [| |acc w|]; try discriminate.
+      destruct (nth_error (reacts Σ (prog (fcomp fn))) i) as [c|]; [|discriminate].
+      destruct (disposed fn || conflict K_eq_dec Σ prog γ c); [discriminate|]; injection H as <-.
+      rewrite fibers_set_life in Hm; destruct (Nat.eqb_spec m n) as [->|].
+      + injection Hm as <-; cbn in *; exact (RI n fn Hn Hp).
+      + cbn in Hm; unfold fupd in Hm; destruct (Nat.eqb_spec m (next γ)).
+        * injection Hm as <-; discriminate.
+        * exact (RI m fm' Hm Hp).
+    - fold (step γ (ORestart n)) in H.
+      apply restart_shape in H as (fn & acc & w & Hn & _ & _ & ->).
+      exact (SL γ n fn _ eq_refl Hn Hm).
   Qed.
 
   (** ** Steps keep the initial states of existing provisions *)
@@ -567,9 +718,9 @@ Section FailCrux.
 
   (** ** Every step keeps the failure invariant *)
   Theorem finv_step (vs vs' : VState) ℓ :
-    PInv (vcore vs) -> FailInv vs -> vstep vs ℓ = Some vs' -> FailInv vs'.
+    PInv (vcore vs) -> RootInv (vcore vs) -> FailInv vs -> vstep vs ℓ = Some vs' -> FailInv vs'.
   Proof.
-    intros [SI EP] (F1 & F2 & F3) H.
+    intros [SI EP] RI (F1 & F2 & F3) H.
     pose proof (vstep_core K_eq_dec Σ prog vs vs' ℓ H) as Hs.
     pose proof (vstep_fview K_eq_dec Σ prog vs vs' ℓ H) as HF.
     destruct (step_inilog _ _ _ Hs) as [Hnx Hini].
@@ -596,7 +747,7 @@ Section FailCrux.
       + rewrite <- Hc; apply Keep; [|exact (F1 m fm acc w e Hf Hlf)].
         intros k p Hin; apply (VP m fm Hf k); rewrite Hlf; exact Hin.
       + rewrite (same_comp γ γ' _ m fm fm' SI Hs Hf Hm).
-        apply Keep; [|exact (load_fail_ideal γ m fm P acc w acc' w e SI EP Hf Hlf Hls)].
+        apply Keep; [|exact (load_fail_ideal γ m fm P acc w acc' w e SI EP RI Hf Hlf Hls)].
         intros k p Hin; apply (VP m fm Hf k); rewrite Hlf; exact Hin.
     - intros m fm' e Hm Hl.
       destruct (failed_after K_eq_dec Σ prog γ γ' _ m fm' e Hs Hm Hl) as [(f & Hf & Hlf)|HU].
@@ -629,51 +780,59 @@ Section FailCrux.
   Definition NoReact (ls : list (@VLabel C)) : Prop :=
     forall ℓ, In ℓ ls -> forall n i, vlabel ℓ <> OReact n i.
 
+  (** The orchestrator inserts only insertable components. *)
+  Definition RootOK (ls : list (@VLabel C)) : Prop :=
+    forall ℓ, In ℓ ls -> forall c, vlabel ℓ = OInsert c -> rootb c = true.
+
   Corollary finv_reachable (vs : VState) ls :
-    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls ->
+    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls -> RootOK ls ->
     PInv (vcore vs) /\ FailInv vs.
   Proof.
-    assert (G : forall vs0 ls vs, PInv (vcore vs0) -> FailInv vs0 ->
-                vrun_labels K_eq_dec Σ prog vs0 ls = Some vs -> NoReact ls ->
+    assert (G : forall vs0 ls vs, PInv (vcore vs0) -> RootInv (vcore vs0) -> FailInv vs0 ->
+                vrun_labels K_eq_dec Σ prog vs0 ls = Some vs -> NoReact ls -> RootOK ls ->
                 PInv (vcore vs) /\ FailInv vs).
-    { intros vs0 ls0; revert vs0; induction ls0 as [|ℓ ls0 IH]; cbn; intros vs0 vs1 P0 F0 H NR.
+    { intros vs0 ls0; revert vs0; induction ls0 as [|ℓ ls0 IH]; cbn; intros vs0 vs1 P0 R0 F0 H NR RO.
       - injection H as <-; auto.
       - destruct (ViewFail.vstep K_eq_dec Σ prog vs0 ℓ) as [vs0'|] eqn:Hs; [|discriminate].
-        apply (IH vs0'); [| exact (finv_step vs0 vs0' ℓ P0 F0 Hs) | exact H |].
+        pose proof (vstep_core K_eq_dec Σ prog vs0 vs0' ℓ Hs) as Hc.
+        apply (IH vs0'); [| exact (root_step _ _ _ R0 Hc (RO ℓ (or_introl eq_refl)))
+                          | exact (finv_step vs0 vs0' ℓ P0 R0 F0 Hs) | exact H | |].
         + exact (pinv_step K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom _ _ _
-                   (NR ℓ (or_introl eq_refl)) P0 (vstep_core K_eq_dec Σ prog vs0 vs0' ℓ Hs)).
-        + intros ℓ' Hin; exact (NR ℓ' (or_intror Hin)). }
-    intros H NR; apply (G (vinit Σ) ls vs); [exact (pinv_init K_eq_dec Σ prog Kb) | | exact H | exact NR].
+                   (NR ℓ (or_introl eq_refl)) P0 Hc).
+        + intros ℓ' Hin; exact (NR ℓ' (or_intror Hin)).
+        + intros ℓ' Hin; exact (RO ℓ' (or_intror Hin)). }
+    intros H NR RO; apply (G (vinit Σ) ls vs); [exact (pinv_init K_eq_dec Σ prog Kb)
+                                              | intros m fm Hm; discriminate | | exact H | exact NR | exact RO].
     split; [intros n f acc w e Hn; discriminate|]; split; [intros n f e Hn; discriminate|].
     intros n w Hw; discriminate.
   Qed.
 
   (** ** Quiet states: failed fibers fail ideally, Active ones reach [Done] *)
   Theorem quiet_failed_ideal (vs : VState) ls :
-    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls -> vquiet K_eq_dec Σ prog vs ->
+    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls -> RootOK ls -> vquiet K_eq_dec Σ prog vs ->
     forall n f e, fibers (vcore vs) n = Some f -> life f = Inactive Σ (Some e) ->
       exists w, target Σ prog (vcore vs) n = Some w /\ IdealFails (fcomp f) (rho (vcore vs) w).
   Proof.
-    intros H NR Q n f e Hn Hl.
+    intros H NR RO Q n f e Hn Hl.
     destruct (vquiet_current K_eq_dec Σ prog (Confluence.Hwf Σ prog rank Rb Hrank Hbnd) vs ls H Q)
       as [_ Cur].
     destruct (Cur n f e Hn Hl) as (w & Hw & Ht).
-    destruct (finv_reachable vs ls H NR) as [_ (_ & F2 & _)].
+    destruct (finv_reachable vs ls H NR RO) as [_ (_ & F2 & _)].
     destruct (F2 n f e Hn Hl) as (w' & Hw' & Hid).
     rewrite Hw in Hw'; injection Hw' as <-; eauto.
   Qed.
 
   Theorem quiet_active_done (vs : VState) ls :
-    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls -> vquiet K_eq_dec Σ prog vs ->
+    vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs -> NoReact ls -> RootOK ls -> vquiet K_eq_dec Σ prog vs ->
     forall n f acc w, fibers (vcore vs) n = Some f -> life f = Active Σ acc w ->
       target Σ prog (vcore vs) n = Some w /\ IdealDone (fcomp f) (rho (vcore vs) w).
   Proof.
-    intros H NR Q n f acc w Hn Hl.
+    intros H NR RO Q n f acc w Hn Hl.
     destruct (vquiet_current K_eq_dec Σ prog (Confluence.Hwf Σ prog rank Rb Hrank Hbnd) vs ls H Q)
       as [St _].
     pose proof (St n f Hn) as Sf; unfold settled_fiber in Sf; rewrite Hl in Sf.
     split; [exact Sf|].
-    destruct (finv_reachable vs ls H NR) as [[_ EP] _].
+    destruct (finv_reachable vs ls H NR RO) as [[_ EP] _].
     pose proof (EP n f Hn) as E; rewrite Hl in E; destruct E as (evs & T & _).
     exists evs; exact T.
   Qed.
@@ -692,14 +851,17 @@ Section FailCrux.
   Qed.
 
   Lemma vlrun_reach (vs0 vs : VState) ls0 :
-    vrun_labels K_eq_dec Σ prog (vinit Σ) ls0 = Some vs0 -> NoReact ls0 -> VLRun vs0 vs ->
-    exists ls, vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs /\ NoReact ls.
+    vrun_labels K_eq_dec Σ prog (vinit Σ) ls0 = Some vs0 -> NoReact ls0 -> RootOK ls0 -> VLRun vs0 vs ->
+    exists ls, vrun_labels K_eq_dec Σ prog (vinit Σ) ls = Some vs /\ NoReact ls /\ RootOK ls.
   Proof.
-    intros H0 N0 R; revert ls0 H0 N0; induction R as [vs|vs ℓ vs1 vs2 Hl Hs R IH]; intros ls0 H0 N0.
+    intros H0 N0 O0 R; revert ls0 H0 N0 O0; induction R as [vs|vs ℓ vs1 vs2 Hl Hs R IH]; intros ls0 H0 N0 O0.
     - exists ls0; auto.
-    - apply (IH (ls0 ++ [ℓ])); [exact (vrun_snoc _ _ _ ls0 ℓ H0 Hs)|].
-      intros ℓ' Hin; apply in_app_or in Hin as [Hin|[<-|[]]]; [exact (N0 ℓ' Hin)|].
-      exact (vlife_core_label ℓ Hl).
+    - apply (IH (ls0 ++ [ℓ])); [exact (vrun_snoc _ _ _ ls0 ℓ H0 Hs)| |].
+      + intros ℓ' Hin; apply in_app_or in Hin as [Hin|[<-|[]]]; [exact (N0 ℓ' Hin)|].
+        exact (vlife_core_label ℓ Hl).
+      + intros ℓ' Hin c Hc; apply in_app_or in Hin as [Hin|[<-|[]]]; [exact (O0 ℓ' Hin c Hc)|].
+        destruct Hl as [(n & ℓ0 & Hin & ->)|(n & ->)]; cbn [vlabel] in Hc; [|discriminate].
+        subst ℓ0; cbn in Hin; intuition discriminate.
   Qed.
 
 

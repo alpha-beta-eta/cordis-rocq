@@ -121,10 +121,26 @@
    `NoFailed`，`final_fiber` 允许任意错误标记；`state_confluence` 改写为以控制层的一致为前提的 `state_agree`。
    `vstate_confluence` 与 `vconfluence_failures` 合起来：两次执行终态中每个绑定的服务状态 ≃。
 
-   **含 spawn（已完成，`SpawnConfF.v`，义务 A）。** spawn 冲突导致的失败由调度决定（两个父 fiber 是否同时
-   在场），所以需要一条关于 spawn 的义务。先取最简单的义务 A：spawn 出的组件不提供任何键，于是 `PSpawn`
-   永远不会冲突，spawn 不再是失败的来源。为此 `FailCrux.v` 的义务从"不 spawn"放宽为 A（`HSpawnNP`），
-   跨两次执行的不含 spawn 部分移到 `FailConf.v`。`SpawnConfF.v` 复制核心 `SpawnConf.v`：
+   **含 spawn（已完成，`SpawnConfF.v`，义务 B）。** spawn 冲突导致的失败由调度决定（两个父 fiber 是否同时
+   在场），所以需要一条关于 spawn 的义务，保证 `PSpawn` 永远不会冲突。最初取的是义务 A（spawn 出的组件不提供
+   任何键），现在放宽为义务 B。对提供键的子组件 c'：
+
+   | 义务 | 内容 |
+   |---|---|
+   | `HKidDisj` | c' 的提供集合与其他任何组件不交 |
+   | `HKidRoot` | c' 不可由编排者插入（`rootb`；运行中插入的组件都可插入，`RootOK`） |
+   | `HKidUnique` | 只有一个组件 spawn c' |
+   | `HKidParent` | 这个组件自己提供键，所以同一时刻至多一个 fiber |
+   | `HKidOnce` | 每条路径上至多 spawn c' 一次 |
+
+   为什么不会冲突：冲突的在场 fiber 只能是 c' 的 fiber（`HKidDisj`）；它不是根（`HKidRoot` 加不变式 `RootInv`：
+   根 fiber 运行的都是可插入组件，`root_step` 证明每一步保持）；它的父 fiber 运行 spawn c' 的唯一组件
+   （`HKidUnique`，由核心的 `SpawnProv`），而这个组件只有一个 fiber（`HKidParent` 加不相交性），就是正在加载的
+   这个；于是 c' 已经出现在本次加载的理想轨迹中（`corr_spawn`），与 `HKidOnce` 矛盾。义务 A 是 B 的特例，
+   不含 spawn 时 B 平凡成立（`FailConf.v` 这样实例化）。
+
+   为此 `FailCrux.v` 的义务从"不 spawn"放宽为 B，跨两次执行的不含 spawn 部分移到 `FailConf.v`。
+   `SpawnConfF.v` 复制核心 `SpawnConf.v`：
 
    - `Final` 取自 `StateConfF.v`（不要求 `NoFailed`）；
    - 沿规范名的对应（`Corresp`）多一项"失败与否相同"；归纳步 `corr_pair` 按 `failed_same` 的办法把 fiber 分成
@@ -134,8 +150,7 @@
    - `vspawn_confluence`：从可达状态出发、只走生命周期步（含 `VClear`）、终于 quiet 的两次执行在重命名意义下
      一致。`VClear` 即 `O-Reset`，补证了它保持 `SLInv` 与根 fiber（`sl_oreset`、`rk_oreset`）。
 
-   **还没做的。** 把义务 A 放宽到精确的义务 B（提供键的子组件有唯一的 spawn 位置等）；与编排交错的版本
-   （核心 `Dynamic.v`）。
+   **还没做的。** 与编排交错的版本（核心 `Dynamic.v`）。
 
 ## 2. Cordis 的现状（证据）
 
@@ -375,9 +390,9 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成 |
 | `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
-| `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 第 3 节第 2 层：每种失败都是理想失败（FailCrux，义务：spawn 出的组件不提供键）；失败集合相同、合流包含失败（FailConf，不含 spawn） | 完成 |
+| `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 第 3 节第 2 层：每种失败都是理想失败（FailCrux，spawn 义务 B）；失败集合相同、合流包含失败（FailConf，不含 spawn） | 完成 |
 | `theories/StateConfF.v` | 第 3 节：合流包含失败，服务状态 ≃ | 完成 |
-| `theories/SpawnConfF.v` | 第 3 节：合流包含失败，含 spawn（义务 A：spawn 出的组件不提供键） | 完成 |
+| `theories/SpawnConfF.v` | 第 3 节：合流包含失败，含 spawn（义务 B） | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
 | `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |
 | `theories/Resource.v` | 5.3 | 完成 |

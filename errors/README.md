@@ -35,7 +35,7 @@ sh errors/build.sh
 | `theories/Classify.v` | 合流包含失败，第 1 层：失败集合相同时控制状态合流 | 完成 |
 | `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 合流包含失败，第 2 层：失败都是理想失败，两次执行失败集合相同；主定理 `vconfluence_failures`（不含 spawn；新义务 `HNoRej`、`HProv`） | 完成 |
 | `theories/StateConfF.v` | 合流包含失败，服务状态：终态中每个绑定的服务状态 ≃（`vstate_confluence`） | 完成 |
-| `theories/SpawnConfF.v` | 合流包含失败，含 spawn：沿规范名在重命名意义下一致，失败的 fiber 也对应（`vspawn_confluence`；义务：spawn 出的组件不提供键） | 完成 |
+| `theories/SpawnConfF.v` | 合流包含失败，含 spawn：沿规范名在重命名意义下一致，失败的 fiber 也对应（`vspawn_confluence`；spawn 义务 B：提供键的子组件与其他组件不交、不在根上插入、唯一的 spawner、每条路径至多一次） | 完成 |
 | `theories/Async.v` | 确定的外部读取：按世界展开即核心组件表，核心定理原样适用；组件义务写在扩展程序上 | 完成 |
 | `theories/AsyncKind.v` | 外部失败的归因：每个理想失败恰好是被拒的读取、程序失败、操作失败之一，只取决于依赖的初始状态 | 完成 |
 | `theories/Resource.v` | 外部资源的释放失败：每一步都是核心的一步；没有静默的泄漏；全部卸载后每个获取都已释放或记为泄漏 | 完成 |

@@ -156,18 +156,41 @@ Section FailConf.
   Hypothesis HProv : forall c ρ evs k s P, Tr c ρ evs (PProvide k s P) ->
     In k (cprovs c) /\ find_prov K_eq_dec Σ evs k = None.
 
-  Let HNP : forall c c', SpawnIn Σ c' (cbody c) -> cprovs c' = [] :=
-    fun c c' H => False_ind _ (NoSpawn c c' H).
+  (** Without spawn, the spawn obligations of [FailCrux.v] hold vacuously,
+      with every component insertable. *)
+  Lemma tr_sub0 c ρ evs P : Tr c ρ evs P -> Sub Σ P (cbody c).
+  Proof.
+    intros H; induction H as [|evs k a κ s0 s1 s' g o T IH R Rp X|evs k s P T IH|evs c' P T IH].
+    - apply sub_refl.
+    - eapply Sub_trans; [|exact IH]; eapply sub_op; apply sub_refl.
+    - eapply Sub_trans; [|exact IH]; apply sub_prov; apply sub_refl.
+    - eapply Sub_trans; [|exact IH]; apply sub_spawn; apply sub_refl.
+  Qed.
+
+  Let rb : C -> bool := fun _ => true.
+  Let HKD : forall p c' d, SpawnIn Σ c' (cbody p) ->
+    overlaps K_eq_dec (cprovs c') (cprovs d) = true -> d = c' :=
+    fun p c' d H _ => False_ind _ (NoSpawn p c' H).
+  Let HKR : forall p c', SpawnIn Σ c' (cbody p) -> rb c' = true -> cprovs c' = [] :=
+    fun p c' H _ => False_ind _ (NoSpawn p c' H).
+  Let HKU : forall p p' c', SpawnIn Σ c' (cbody p) -> Spawns Σ prog p' c' -> cprovs c' <> [] -> p' = p :=
+    fun p p' c' H _ _ => False_ind _ (NoSpawn p c' H).
+  Let HKP : forall p c', SpawnIn Σ c' (cbody p) -> cprovs c' <> [] -> cprovs p <> [] :=
+    fun p c' H _ => False_ind _ (NoSpawn p c' H).
+  Let HKO : forall c ρ evs c' P, Tr c ρ evs (PSpawn c' P) -> cprovs c' <> [] -> ~ In (TSpawn Σ c') evs :=
+    fun c ρ evs c' P T _ => False_ind _ (NoSpawn c c' (SpawnIn_Sub Σ c' _ _ (tr_sub0 c ρ evs _ T) (spi_here Σ c' P))).
+  Let RO : forall ls, RootOK rb ls := fun ls _ _ _ _ => eq_refl.
 
   Local Notation finv_reachable :=
-    (FailCrux.finv_reachable K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom HNoRej HNP HProv).
+    (FailCrux.finv_reachable K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom HNoRej HProv
+       rb HKD HKR HKU HKP HKO).
   Local Notation quiet_failed_ideal :=
     (FailCrux.quiet_failed_ideal K_eq_dec Σ prog Kb HK rank Rb Hrank Hbnd Total Hwb HUI HTI HRI HCom
-       HNoRej HNP HProv).
+       HNoRej HProv rb HKD HKR HKU HKP HKO).
   Local Notation quiet_active_done :=
     (FailCrux.quiet_active_done K_eq_dec Σ prog Kb HK rank Rb Hrank Hbnd Total Hwb HUI HTI HRI HCom
-       HNoRej HNP HProv).
-  Local Notation vlrun_reach := (FailCrux.vlrun_reach K_eq_dec Σ prog).
+       HNoRej HProv rb HKD HKR HKU HKP HKO).
+  Local Notation vlrun_reach := (FailCrux.vlrun_reach K_eq_dec Σ prog rb).
   Local Notation lookup_some := (FailCrux.lookup_some K_eq_dec).
 
   Lemma cinv_vreach (vs : VState) ls :
@@ -195,17 +218,17 @@ Section FailConf.
     pose proof (vinv_reachable K_eq_dec Σ prog vs0 ls0 H0) as V0.
     destruct (vlrun_static K_eq_dec Σ prog Kb HK rank Hrank NoSpawn Total vs0 vs1 I0 V0 R1) as (C1 & _ & T1 & U1).
     destruct (vlrun_static K_eq_dec Σ prog Kb HK rank Hrank NoSpawn Total vs0 vs2 I0 V0 R2) as (C2 & _ & T2 & U2).
-    destruct (vlrun_reach vs0 vs1 ls0 H0 N0 R1) as (ls1 & H1 & N1).
-    destruct (vlrun_reach vs0 vs2 ls0 H0 N0 R2) as (ls2 & H2 & N2).
-    destruct (finv_reachable vs1 ls1 H1 N1) as [[SI1 EP1] _].
-    destruct (finv_reachable vs2 ls2 H2 N2) as [[SI2 EP2] _].
+    destruct (vlrun_reach vs0 vs1 ls0 H0 N0 (RO ls0) R1) as (ls1 & H1 & N1 & O1).
+    destruct (vlrun_reach vs0 vs2 ls0 H0 N0 (RO ls0) R2) as (ls2 & H2 & N2 & O2).
+    destruct (finv_reachable vs1 ls1 H1 N1 O1) as [[SI1 EP1] _].
+    destruct (finv_reachable vs2 ls2 H2 N2 O2) as [[SI2 EP2] _].
     pose proof (vquiet_settled K_eq_dec Σ prog Kb rank Rb Hrank Hbnd vs1 C1 Q1) as St1.
     pose proof (vquiet_settled K_eq_dec Σ prog Kb rank Rb Hrank Hbnd vs2 C2 Q2) as St2.
     pose proof (sinv_wf _ SI1) as W1; pose proof (sinv_wf _ SI2) as W2.
-    pose proof (QF1 := quiet_failed_ideal vs1 ls1 H1 N1 Q1).
-    pose proof (QF2 := quiet_failed_ideal vs2 ls2 H2 N2 Q2).
-    pose proof (QA1 := quiet_active_done vs1 ls1 H1 N1 Q1).
-    pose proof (QA2 := quiet_active_done vs2 ls2 H2 N2 Q2).
+    pose proof (QF1 := quiet_failed_ideal vs1 ls1 H1 N1 O1 Q1).
+    pose proof (QF2 := quiet_failed_ideal vs2 ls2 H2 N2 O2 Q2).
+    pose proof (QA1 := quiet_active_done vs1 ls1 H1 N1 O1 Q1).
+    pose proof (QA2 := quiet_active_done vs2 ls2 H2 N2 O2 Q2).
     set (γ0 := vcore vs0) in *; set (γ1 := vcore vs1) in *; set (γ2 := vcore vs2) in *.
     (* presence and components come from γ0 *)
     assert (Pr : forall γ, Static Σ γ0 γ -> settled Σ prog γ -> forall n f, fibers γ n = Some f ->

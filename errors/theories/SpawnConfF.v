@@ -2,9 +2,11 @@
 
     The core's confluence with spawn ([SpawnConf.spawn_confluence]) asks
     that no fiber has failed at the end. This file repeats [SpawnConf.v]
-    with failures allowed, under the spawn obligation of [FailCrux.v]:
-    spawned components provide nothing, so a spawn never conflicts and
-    spawning is never a source of failure.
+    with failures allowed, under the spawn obligation B of [FailCrux.v]
+    (a spawned component that provides keys provides nothing another
+    component provides, is never inserted at the root, has one spawner,
+    which provides keys, and is spawned at most once on a path), so a
+    spawn never conflicts and spawning is never a source of failure.
 
     - [Final] comes from [StateConfF.v] (no [NoFailed]); a final fiber is
       Inactive with any mark, or Active with a complete ideal trace.
@@ -1178,30 +1180,40 @@ Section SpawnConfF.
   (** ** Confluence with failures and spawn *)
   Hypothesis HNoRej : forall (k : K) (a b : Op Σ) (ta tb : nat), CoPair k a b -> ta <> tb ->
     forall x x' h ob, run a ta x = Some (x', h, ob) -> run b tb x <> None -> run b tb x' <> None.
-  Hypothesis HSpawnNP : forall c c', SpawnIn Σ c' (cbody c) -> cprovs c' = [].
   Hypothesis HProv : forall c ρ evs k s P, Tr c ρ evs (PProvide k s P) ->
     In k (cprovs c) /\ find_prov evs k = None.
+  (** Obligation B on spawn ([FailCrux.v]). *)
+  Variable rootb : C -> bool.
+  Hypothesis HKidDisj : forall p c' d, SpawnIn Σ c' (cbody p) ->
+    overlaps K_eq_dec (cprovs c') (cprovs d) = true -> d = c'.
+  Hypothesis HKidRoot : forall p c', SpawnIn Σ c' (cbody p) -> rootb c' = true -> cprovs c' = [].
+  Hypothesis HKidUnique : forall p p' c', SpawnIn Σ c' (cbody p) -> Spawns Σ prog p' c' ->
+    cprovs c' <> [] -> p' = p.
+  Hypothesis HKidParent : forall p c', SpawnIn Σ c' (cbody p) -> cprovs c' <> [] -> cprovs p <> [].
+  Hypothesis HKidOnce : forall c ρ evs c' P, Tr c ρ evs (PSpawn c' P) -> cprovs c' <> [] ->
+    ~ In (TSpawn c') evs.
 
   Theorem vspawn_confluence (vs0 vs1 vs2 : ViewFail.VState Σ) ls0 :
-    vrun_labels K_eq_dec Σ prog (vinit Σ) ls0 = Some vs0 -> NoReact ls0 ->
+    vrun_labels K_eq_dec Σ prog (vinit Σ) ls0 = Some vs0 -> NoReact ls0 -> RootOK rootb ls0 ->
     SLInv (ViewFail.vcore Σ vs0) ->
     VLRun vs0 vs1 -> VLRun vs0 vs2 ->
     vquiet K_eq_dec Σ prog vs1 -> vquiet K_eq_dec Σ prog vs2 ->
     Agree (ViewFail.vcore Σ vs1) (ViewFail.vcore Σ vs2).
   Proof.
-    intros H0 N0 S0 R1 R2 Q1 Q2.
+    intros H0 N0 O0 S0 R1 R2 Q1 Q2.
     destruct (finv_reachable K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom
-                HNoRej HSpawnNP HProv vs0 ls0 H0 N0) as [P0 _].
+                HNoRej HProv rootb HKidDisj HKidRoot HKidUnique HKidParent HKidOnce vs0 ls0 H0 N0 O0)
+      as [P0 _].
     assert (Fin : forall vs, VLRun vs0 vs -> vquiet K_eq_dec Σ prog vs ->
               FinalS (ViewFail.vcore Σ vs) /\ FailChar (ViewFail.vcore Σ vs) /\
               RootKeep (ViewFail.vcore Σ vs0) (ViewFail.vcore Σ vs)).
     { intros vs R Q.
-      destruct (vlrun_reach K_eq_dec Σ prog vs0 vs ls0 H0 N0 R) as (ls & H & N).
+      destruct (vlrun_reach K_eq_dec Σ prog rootb vs0 vs ls0 H0 N0 O0 R) as (ls & H & N & O).
       destruct (vlrun_slrk vs0 vs P0 S0 R) as (P & SL & RK).
       destruct (vquiet_current K_eq_dec Σ prog (Hwf Σ prog rank Rb Hrank Hbnd) vs ls H Q) as [St _].
       split; [split; [split; [exact P | exact St] | exact SL]|]; split; [|exact RK].
       exact (quiet_failed_ideal K_eq_dec Σ prog Kb HK rank Rb Hrank Hbnd Total Hwb HUI HTI HRI HCom
-               HNoRej HSpawnNP HProv vs ls H N Q). }
+               HNoRej HProv rootb HKidDisj HKidRoot HKidUnique HKidParent HKidOnce vs ls H N O Q). }
     destruct (Fin vs1 R1 Q1) as (F1 & FC1 & K1).
     destruct (Fin vs2 R2 Q2) as (F2 & FC2 & K2).
     assert (RI : forall γ, RootInj (fun n => n) γ) by (intros γ n n' f f' _ _ _ _ E; exact E).
