@@ -8,8 +8,9 @@
     A queued component is not a fiber yet. The state gets a FIFO queue of
     (ticket, component):
 
-    - [QIns c]: refused if [c] meets a fiber that is not retired, or a
-      component already queued; otherwise [c] joins the queue. Queued
+    - [QIns c]: refused if [c] is not insertable ([rootb]), meets a fiber
+      that is not retired, or a component already queued; otherwise [c]
+      joins the queue. Queued
       components count as claimants, so they are pairwise disjoint and
       disjoint from every live fiber.
     - [QAdmit] (a lifecycle rule): the head of the queue is inserted with
@@ -25,8 +26,9 @@
       carries over ([qwf_reachable]).
     - [qtermination]: lifecycle steps (the core's and [QAdmit]) do not go
       on forever (queue length, then the core measure).
-    - [qquiet_empty]: a quiet reachable state has an empty queue, when
-      spawned components provide nothing ([HKids]).
+    - [qquiet_empty]: a quiet reachable state has an empty queue, when a
+      spawned component provides nothing an insertable component provides
+      ([HSpawnRoot], the static obligation on spawn of DESIGN.md section 3).
     - the cordiverse/cordis#358 sequence has a single outcome under the
       queue: the new provider waits, then everything is Active
       ([q358_blocked], [q358_obs]).
@@ -46,6 +48,9 @@ Section Queue.
   Local Notation step := (step K_eq_dec Σ prog).
   Local Notation cprovs c := (provs Σ (prog c)).
   Local Notation overlaps := (overlaps K_eq_dec).
+
+  (** The components the orchestrator may insert. *)
+  Variable rootb : C -> bool.
 
   (** ** State and rules *)
   Record QState : Type := mkQ {
@@ -77,7 +82,7 @@ Section Queue.
   Definition qstep (qs : QState) (ℓ : QLabel) : option QState :=
     match ℓ with
     | QIns c =>
-        if live_conflict (core qs) c || qconflict (queue qs) c then None
+        if negb (rootb c) || live_conflict (core qs) c || qconflict (queue qs) c then None
         else Some (mkQ (core qs) (queue qs ++ [(ticket qs, c)]) (S (ticket qs)))
     | QCancel t =>
         if existsb (fun e => Nat.eqb (fst e) t) (queue qs)
@@ -233,10 +238,12 @@ Section Queue.
 
     (** ** A quiet state has an empty queue *)
 
-    (** Spawned components provide nothing. (The design asks only that their
-        provisions be statically disjoint from every other component's; this
-        file proves the special case.) *)
-    Hypothesis HKids : forall c c', Spawns Σ prog c c' -> cprovs c' = [].
+    (** A spawned component provides nothing that a component the
+        orchestrator may insert provides (DESIGN.md section 3, the static
+        obligation on spawn). In particular a component that is both spawned
+        and insertable provides nothing. *)
+    Hypothesis HSpawnRoot : forall c c' d, Spawns Σ prog c c' -> rootb d = true ->
+      overlaps (cprovs c') (cprovs d) = false.
 
     (** Queued components are pairwise disjoint. *)
     Fixpoint QDisj (q : list (nat * C)) : Prop :=
@@ -251,8 +258,11 @@ Section Queue.
       forall e x fx, In e (queue qs) -> fibers Σ (core qs) x = Some fx -> disposed Σ fx = false ->
         overlaps (cprovs (snd e)) (cprovs (comp Σ fx)) = false.
 
+    (** Only insertable components are queued. *)
+    Definition QRoot (qs : QState) : Prop := forall e, In e (queue qs) -> rootb (snd e) = true.
+
     Definition QInv (qs : QState) : Prop :=
-      TInv (core qs) /\ QDisj (queue qs) /\ QLive qs.
+      TInv (core qs) /\ QDisj (queue qs) /\ QLive qs /\ QRoot qs.
 
     Lemma overlaps_nil_r (l : list K) : overlaps l [] = false.
     Proof. induction l; cbn; auto. Qed.
@@ -283,13 +293,13 @@ Section Queue.
       TInv γ -> step γ ℓ = Some γ' -> (forall c, ℓ <> OInsert c) ->
       fibers Σ γ' x = Some fx' -> disposed Σ fx' = false ->
       (exists fx, fibers Σ γ x = Some fx /\ comp Σ fx = comp Σ fx' /\ disposed Σ fx = false) \/
-      cprovs (comp Σ fx') = [].
+      exists c, Spawns Σ prog c (comp Σ fx').
     Proof.
       intros I H Hno Hx Hd.
       (* Lifecycle labels: the core's [Effects]. *)
       assert (LC : forall n, In ℓ (lifecycle_labels n) ->
                    (exists fx, fibers Σ γ x = Some fx /\ comp Σ fx = comp Σ fx' /\ disposed Σ fx = false) \/
-                   cprovs (comp Σ fx') = []).
+                   exists c, Spawns Σ prog c (comp Σ fx')).
       { intros n Hin.
         destruct (fibers Σ γ n) as [fn|] eqn:Hn;
           [|rewrite (step_absent K_eq_dec Σ prog γ n ℓ Hn Hin) in H; discriminate].
@@ -303,7 +313,7 @@ Section Queue.
             * left; eauto.
             * cbn in Hd; discriminate.
         - destruct (E2 x fx' Hx0 Hx) as [_ Hsp].
-          right; apply (HKids (comp Σ fn)); left; exact Hsp. }
+          right; exists (comp Σ fn); left; exact Hsp. }
       destruct ℓ as [c|n|n|n|n|n|n|n|n|n|n|n i|n];
         try (apply (LC n); cbn; tauto).
       - exfalso; exact (Hno c eq_refl).
@@ -327,7 +337,7 @@ Section Queue.
         rewrite fibers_set_life in Hx; destruct (Nat.eqb_spec x n) as [->|].
         + injection Hx as <-; left; exists fn; cbn in *; auto.
         + cbn in Hx; unfold fupd in Hx; destruct (Nat.eqb_spec x (next Σ γ)) as [->|].
-          * injection Hx as <-; right; cbn; apply (HKids (comp Σ fn)); right.
+          * injection Hx as <-; right; cbn; exists (comp Σ fn); right.
             exact (nth_error_In _ _ Hc).
           * left; eauto.
       - (* ORestart *)
@@ -338,13 +348,13 @@ Section Queue.
     Qed.
 
     Lemma qlive_core (qs : QState) ℓ γ' :
-      TInv (core qs) -> QLive qs -> step (core qs) ℓ = Some γ' -> (forall c, ℓ <> OInsert c) ->
+      TInv (core qs) -> QLive qs -> QRoot qs -> step (core qs) ℓ = Some γ' -> (forall c, ℓ <> OInsert c) ->
       QLive (mkQ γ' (queue qs) (ticket qs)).
     Proof.
-      intros I L H Hno e x fx' He Hx Hd; cbn in *.
-      destruct (live_after _ _ ℓ x fx' I H Hno Hx Hd) as [(fx & Hx0 & Hc & Hd0)|Hnil].
+      intros I L Rt H Hno e x fx' He Hx Hd; cbn in *.
+      destruct (live_after _ _ ℓ x fx' I H Hno Hx Hd) as [(fx & Hx0 & Hc & Hd0)|(c & Hsp)].
       - rewrite <- Hc; exact (L e x fx He Hx0 Hd0).
-      - rewrite Hnil; apply overlaps_nil_r.
+      - rewrite overlaps_sym; exact (HSpawnRoot c _ _ Hsp (Rt e He)).
     Qed.
 
     Lemma existsb_false {A} (p : A -> bool) l x : existsb p l = false -> In x l -> p x = false.
@@ -356,13 +366,15 @@ Section Queue.
     Theorem qinv_step (qs qs' : QState) ℓ :
       QInv qs -> qstep qs ℓ = Some qs' -> QInv qs'.
     Proof.
-      intros (I & D & L) H.
+      intros (I & D & L & Rt) H.
       pose proof (qstep_core qs qs' ℓ H) as Hc.
       destruct ℓ as [c|t| |ℓ]; cbn [qstep qcore_label] in H, Hc.
       - (* QIns *)
-        destruct (live_conflict (core qs) c || qconflict (queue qs) c) eqn:E; [discriminate|].
-        apply orb_false_iff in E as [El Eq]; injection H as <-; cbn.
-        split; [exact I|]; split.
+        destruct (negb (rootb c) || live_conflict (core qs) c || qconflict (queue qs) c) eqn:E;
+          [discriminate|].
+        apply orb_false_iff in E as [E Eq]; apply orb_false_iff in E as [Er El].
+        apply negb_false_iff in Er; injection H as <-; cbn.
+        split; [exact I|]; split; [|split].
         + apply qdisj_app; [exact D|]; intros e' Hin.
           rewrite overlaps_sym; exact (existsb_false _ _ _ Eq Hin).
         + intros e x fx He Hx Hd; cbn in *.
@@ -370,31 +382,35 @@ Section Queue.
           assert (Hn : In x (names Σ (core qs))).
           { exact (in_names K_eq_dec Σ prog _ x fx (t_wf K_eq_dec Σ prog Kb _ I) Hx). }
           pose proof (existsb_false _ _ _ El Hn) as Hf; cbn in Hf; rewrite Hx, Hd in Hf; exact Hf.
+        + intros e He; cbn in He; apply in_app_or in He as [He|[<-|[]]]; [exact (Rt e He) | exact Er].
       - (* QCancel *)
         destruct (existsb _ _); [|discriminate]; injection H as <-; cbn.
-        split; [exact I|]; split; [apply qdisj_filter; exact D|].
-        intros e x fx He Hx Hd; cbn in *; apply filter_In in He as [He _].
-        exact (L e x fx He Hx Hd).
+        split; [exact I|]; split; [apply qdisj_filter; exact D|]; split.
+        + intros e x fx He Hx Hd; cbn in *; apply filter_In in He as [He _].
+          exact (L e x fx He Hx Hd).
+        + intros e He; cbn in He; apply filter_In in He as [He _]; exact (Rt e He).
       - (* QAdmit *)
         destruct (queue qs) as [|[t c] q] eqn:Hq; [discriminate|].
         destruct (step (core qs) (OInsert c)) as [γ'|] eqn:Hs; [|discriminate].
         injection H as <-; cbn [core queue ticket] in *.
         destruct D as [D0 D].
-        split; [exact (tinv_step K_eq_dec Σ prog Kb HK _ _ _ I Hs)|]; split; [exact D|].
-        intros e x fx He Hx Hd; cbn [core queue ticket] in *.
-        cbn [step] in Hs; destruct (conflict K_eq_dec Σ prog (core qs) c); [discriminate|].
-        injection Hs as <-; cbn in Hx; unfold fupd in Hx.
-        destruct (Nat.eqb_spec x (next Σ (core qs))) as [->|].
-        + injection Hx as <-; cbn; rewrite overlaps_sym; exact (D0 e He).
-        + apply (L e x fx); [rewrite Hq; right; exact He | exact Hx | exact Hd].
+        split; [exact (tinv_step K_eq_dec Σ prog Kb HK _ _ _ I Hs)|]; split; [exact D|]; split.
+        + intros e x fx He Hx Hd; cbn [core queue ticket] in *.
+          cbn [step] in Hs; destruct (conflict K_eq_dec Σ prog (core qs) c); [discriminate|].
+          injection Hs as <-; cbn in Hx; unfold fupd in Hx.
+          destruct (Nat.eqb_spec x (next Σ (core qs))) as [->|].
+          * injection Hx as <-; cbn; rewrite overlaps_sym; exact (D0 e He).
+          * apply (L e x fx); [rewrite Hq; right; exact He | exact Hx | exact Hd].
+        + intros e He; apply Rt; rewrite Hq; right; exact He.
       - (* QCore *)
         assert (Hno : forall c, ℓ <> OInsert c) by (destruct ℓ; try discriminate; congruence).
         assert (H' : step (core qs) ℓ = Some (core qs') /\ queue qs' = queue qs /\ ticket qs' = ticket qs).
         { destruct ℓ; try (exfalso; exact (Hno _ eq_refl));
             (destruct (step (core qs) _); [injection H as <-; auto | discriminate]). }
         destruct H' as (Hs & Hq & Ht); destruct qs' as [γ' q' t']; cbn in *; subst q' t'.
-        split; [exact (tinv_step K_eq_dec Σ prog Kb HK _ _ _ I Hs)|]; split; [exact D|].
-        exact (qlive_core qs ℓ γ' I L Hs Hno).
+        split; [exact (tinv_step K_eq_dec Σ prog Kb HK _ _ _ I Hs)|]; split; [exact D|]; split.
+        + exact (qlive_core qs ℓ γ' I L Rt Hs Hno).
+        + exact Rt.
     Qed.
 
     Corollary qinv_reachable (qs : QState) ls :
@@ -405,8 +421,9 @@ Section Queue.
         - injection H as <-; exact I0.
         - destruct (qstep qs0 ℓ) as [qs0'|] eqn:Hs; [|discriminate].
           exact (IH qs0' qs1 (qinv_step qs0 qs0' ℓ I0 Hs) H). }
-      apply G; split; [exact (tinv_init K_eq_dec Σ prog Kb)|]; split; [exact I|].
-      intros e x fx [].
+      apply G; split; [exact (tinv_init K_eq_dec Σ prog Kb)|]; split; [exact I|]; split.
+      - intros e x fx [].
+      - intros e [].
     Qed.
 
     Definition qquiet (qs : QState) : Prop :=
@@ -435,7 +452,7 @@ Section Queue.
           [exact S|].
         pose proof (QL n ℓ Hin) as Hq0.
         rewrite (qcore_lifecycle_back qs n ℓ γ' Hin Hs) in Hq0; discriminate. }
-      destruct (qinv_reachable qs ls H) as (I & _ & L).
+      destruct (qinv_reachable qs ls H) as (I & _ & L & _).
       destruct (queue qs) as [|[t c] q] eqn:Hq; [reflexivity|exfalso].
       cbn [qstep] in QA; rewrite Hq in QA.
       destruct (step (core qs) (OInsert c)) eqn:Hs; [discriminate|].
@@ -454,8 +471,8 @@ End Queue.
 
 From Cordis Require Import Services.Registry Examples.Basic.
 
-Definition qrunEx := qrun_labels Nat.eq_dec ΣR progEx.
-Definition qstepEx := qstep Nat.eq_dec ΣR progEx.
+Definition qrunEx := qrun_labels Nat.eq_dec ΣR progEx (fun _ => true).
+Definition qstepEx := qstep Nat.eq_dec ΣR progEx (fun _ => true).
 
 (** Insert the provider and the consumer, load both, dispose the provider
     (the consumer still holds it), and ask for a new provider at once. *)

@@ -262,8 +262,11 @@ target 从未改变，所以第 1 节的规则救不了它：这是接纳的问�
 | quiet 的可达状态队列为空 | `qquiet_empty` |
 | #358：新提供者排队，旧 fiber 移除后接纳，全部 Active | `q358_queued`、`q358_blocked`、`q358_obs` |
 
-不变式与 `qquiet_empty` 用的是比第 3 节第二条义务更强的假设 `HKids`：spawn 出的组件不提供任何键。
-放宽到"spawn 的提供集合与其他组件静态不交"是后续工作；难点在于子组件本身也可能被编排者排队。
+不变式与 `qquiet_empty` 用的假设是 `HSpawnRoot`：spawn 出的组件不提供任何"可由编排者插入的组件"提供的键。
+可插入的组件由 `rootb` 给出，`Q-Insert` 拒绝不可插入的组件，不变式多一条"队列中只有可插入的组件"
+（`QRoot`）。这正是第 3 节对 spawn 的静态义务：子组件的提供集合与根组件静态不交；一个组件若既会被 spawn
+又可插入，它就不能提供任何键。早先的版本用的是更强的 `HKids`（spawn 出的组件不提供任何键），它是
+`rootb` 取任意值时的特例。
 保持不变式时，生命周期步直接复用核心的 `Termination.lstep_effects`（一步只改本 fiber、只新增 spawn 出的
 子 fiber），只有四条编排规则要单独处理。
 
@@ -354,7 +357,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 |---|---|---|
 | `theories/Superseded.v` | 4.0 | 完成 |
 | `theories/Admit.v` | 4.1 | 完成 |
-| `theories/Queue.v` | 5.1 | 完成（`HKids` 之下） |
+| `theories/Queue.v` | 5.1 | 完成 |
 | `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成 |
 | `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
