@@ -115,8 +115,13 @@
    - `HProv`（组件）：程序只 provide 声明过的键，每条路径上每个键至多一次。
    不再需要的是核心合流的前提"终态没有失败的 fiber"。
 
-   **还没做的。** 服务状态的合流（核心第 2 层的 ≃）照核心 `StateConf.v` 的论证可以补上；含 spawn 的版本（核心
-   第 3 层）；与编排交错的版本（核心 `Dynamic.v`）。
+   **服务状态（已完成，`StateConfF.v`）。** 核心 `StateConf.v` 对"没有失败的 fiber"的依赖只在一条引理里：终态
+   的 fiber 要么是未失败的 Inactive，要么是带完整理想轨迹的 Active（`final_fiber`）。失败的 fiber 也是 Inactive，
+   累加器为空，所以其余证明不受影响。`StateConfF.v` 复制 `StateConf.v` 到 `final_evs` 为止，`Final` 不再要求
+   `NoFailed`，`final_fiber` 允许任意错误标记；`state_confluence` 改写为以控制层的一致为前提的 `state_agree`。
+   `vstate_confluence` 与 `vconfluence_failures` 合起来：两次执行终态中每个绑定的服务状态 ≃。
+
+   **还没做的。** 含 spawn 的版本（核心第 3 层，`SpawnConf.v`）；与编排交错的版本（核心 `Dynamic.v`）。
 
 ## 2. Cordis 的现状（证据）
 
@@ -321,7 +326,7 @@ quiet 状态中每个失败的 fiber 都有唯一的失败种类，且在相同�
 | 4.0 过时的加载不记失败 | 核心的子集（已证） | 核心的子集 | 核心的子集（已证） | 第 3 节的一块 |
 | 4.1 Cordis 的接纳做法 | — | — | — | 反例（已完成） |
 | 5.1 接纳队列 | 对应核心执行（已证） | 同 | 字典序；quiet 时队列为空（已证） | 同输入同插入顺序 |
-| 第 1、3 节 失败按视图记录 | 对应核心执行（已证） | 同核心 | 进展、终止（新度量）已证 | 包含失败（已证，控制状态，不含 spawn） |
+| 第 1、3 节 失败按视图记录 | 对应核心执行（已证） | 同核心 | 进展、终止（新度量）已证 | 包含失败（已证：控制状态与服务状态，不含 spawn） |
 | 5.2 确定的外部读取 | 核心的实例（已证） | 核心的实例 | 核心的实例（终止已示范） | 核心的实例（控制合流已示范） |
 | 5.3 资源释放失败 | 核心的一步（已证） | S 上同核心；没有静默的泄漏（已证） | 同核心 | 同核心 |
 
@@ -354,6 +359,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
 | `theories/IdealFail.v`、`theories/FailCrux.v` | 第 3 节第 2 层：失败集合相同；合流包含失败（不含 spawn） | 完成 |
+| `theories/StateConfF.v` | 第 3 节：合流包含失败，服务状态 ≃ | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
 | `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |
 | `theories/Resource.v` | 5.3 | 完成 |

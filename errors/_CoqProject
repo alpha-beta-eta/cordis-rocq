@@ -12,3 +12,4 @@ theories/FailCrux.v
 theories/Async.v
 theories/Resource.v
 theories/AsyncKind.v
+theories/StateConfF.v
