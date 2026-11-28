@@ -32,6 +32,6 @@ sh errors/build.sh
 | `theories/Queue.v` | 5.1：与已退役 fiber 冲突时排队；对应核心执行，终止，quiet 时队列为空，#358 只有一种结局 | 完成 |
 | `theories/ViewFail.v` | 失败按视图记录：对应核心执行，安全性，quiet 时失败都在当前视图下，计算的对比例子 | 完成 |
 | `theories/VTermination.v` | 新度量下的终止：失败按视图记录之后生命周期步仍不会无限进行 | 完成 |
-| `theories/Classify.v` | 合流包含失败 | 待做 |
+| `theories/Classify.v` | 合流包含失败：第 1 层（失败集合相同时控制状态合流）完成；第 2 层（失败集合相同）待做  |
 | `theories/Async.v` | 确定的外部读取 | 待做 |
 | `theories/Resource.v` | 外部资源的释放失败 | 待做 |

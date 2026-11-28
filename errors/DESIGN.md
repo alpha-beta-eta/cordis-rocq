@@ -85,12 +85,33 @@
    加上 `VClear`）不会无限进行（`vtermination`、`vtermination_reachable`）。核心关于 target、撤销权重、
    秩的引理（`lstep_effects`、`target_stable`、`mu_other`、`Wt_*`、`own_item_ne`）原样复用。成立的原因
    与核心相同：失败的视图过时，只能是更低秩的提供者换了一次提供，而那一步已经让更低秩的度量下降。
-2. **合流包含失败（`Classify.v`）。** 这是主体中最大的一块。核心的第 1 层（控制状态的合流）之所以不看服务
-   状态，是因为没有失败时每条路径都走到 `Done`（`Total`）；一旦失败进来，一个 fiber 的控制结局取决于它的
-   操作结果，第 1、2 层必须合并，证明的形状接近 `SpawnConf.v`（父 fiber 是否走到某个 spawn 也取决于操作
-   结果，那里正是这样合并的）。计划沿用其中的规范名与沿秩归纳，把"理想轨迹"扩展为可能以失败结束的轨迹，
-   `active_iff` 改为"Active 当且仅当依赖都由 Active 的 fiber 提供，且这个视图下的理想轨迹不失败"，失败的
-   fiber 满足对偶条件。先做不含 spawn 的版本。
+2. **合流包含失败（`Classify.v`）。** 这是主体中最大的一块，拆成两层，先做不含 spawn 的版本。
+
+   **第 1 层（已完成）：失败集合相同时，控制状态合流。** `vcontrol_confluence`：从同一个状态出发、只走生命周期
+   步（含 `VClear`）、终于 quiet 的两次执行，若失败的 fiber 相同，则 fiber 集合、组件、Active 集合、每个键的
+   提供者都相同。证明就是核心 `Confluence.control_confluence` 的证明，只改两处：Active 当且仅当没有失败、且
+   声明的每个键都由 Active 的 fiber 提供（`vactive_iff`）；带一个固定"守卫"集合的不动点仍然只有一个解
+   （`fix_unique_guard`）。稳定状态的形状多一种"失败"（`vsettled_shape`）。核心的 `Total`（走到 `Done` 的
+   路径都提供声明的键）本来就允许程序在某些路径上失败，不用改。
+
+   **第 2 层（待做）：两次执行的失败集合相同。** 这需要一条新的服务义务和一条新的不变式：
+
+   - **义务：相遇的操作不拒绝（`HNoRej`）。** 核心的交换性 `Commute` 允许对称的拒绝：a 先 b 后时 b 被拒，
+     b 先 a 后时 a 被拒（同名登记正是这样）。于是"在实际状态上失败"与"在理想轨迹上失败"不等价，失败由
+     调度决定。义务的形式：对 `CoPair` 中的 a、b，若两者在 s 上各自成功，则先后执行也成功。加上 `Commute`，
+     实际状态上的成败就与理想轨迹一致（核心 `ServiceSeq.outcome_after` 只给出"实际成功则理想成功"这一半）。
+   - **理想失败。** 程序 c 在 ρ 下"理想失败"：存在理想轨迹 `Tr c ρ evs P`，P 是失败点（`PFail`；操作在理想
+     状态上返回 `None`；操作的键解析不到；provide 的键不在声明中或已由本轨迹提供）。理想失败与理想走到
+     `Done` 互斥（轨迹确定，`Episode.tr_det`），且只取决于 ρ 在依赖上的取值。
+   - **不变式 `FailInv`。** 失败的 fiber（以及带错误卸载中的 fiber）在它记录的视图 w 下理想失败：
+     `IdealFails c (rho γ w)`。`rho` 读的是 provision 的初始状态（鬼记录 `inilog`，永不删除），所以失败之后
+     仍然成立。保持它的关键一步是 `L-Step` 失败时：由 `EPInv`（加载中的 fiber 的累加器是理想轨迹）和
+     `HNoRej` 推出这次失败也是理想失败。这一步要用 `StateInv.v` 的重放不变式，预计是第 2 层中最费力的部分。
+   - **quiet 状态的刻画。** 由 `vquiet_current`（失败的 fiber 的视图就是当前 target）、`FailInv` 与 `EPInv`：
+     失败当且仅当依赖都由 Active 的 fiber 提供、且在当前 target 下理想失败。
+   - **跨两次执行的比较。** 沿秩归纳，同时证明秩较低的 fiber 在两次执行中出现与否、Active 与否、失败与否、
+     Active 时理想轨迹都相同（核心 `StateConf.final_evs` 的做法）；于是依赖的初始状态相同，理想失败与否相同，
+     失败集合相同，再由第 1 层得到其余结论。服务状态的合流（核心第 2 层的 ≃）随后照核心的论证补上。
 
 ## 2. Cordis 的现状（证据）
 
@@ -306,7 +327,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/Queue.v` | 5.1 | 完成（`HKids` 之下） |
 | `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成 |
 | `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
-| `theories/Classify.v` | 第 3 节：合流包含失败 | |
+| `theories/Classify.v` | 第 3 节：合流包含失败 | 第 1 层完成（失败集合相同时控制状态合流）；第 2 层待做 |
 | `theories/Async.v` | 5.2 | |
 | `theories/Resource.v` | 5.3 | |
 
