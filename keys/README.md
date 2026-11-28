@@ -17,4 +17,5 @@
 | `theories/ScopedConf.v` | 控制层合流（组件不 spawn）：同样的 fiber 与活跃性、同样的键所有者、同样的候选与解析、同样的选择 |
 | `theories/ScopedSpawn.v` | 带 spawn 与服务状态的合流（子 fiber 继承父 fiber 的选择）：按规范名对应，组件、活跃性、键所有者、服务状态、解析与并列都一致 |
 | `theories/ScopedDynamic.v` | 与编排交错的合流：同样的存活组件次序 ⇒ 终态按标签对应、解析与并列一致；静态组装 |
+| `theories/ScopedCons.v` | 对核心的保守性（K6）：所有名字导出、没有私有依赖时，扩展与基组件表上的核心走同样的步，只在三处分开（核心报冲突处、实例 id 重用、选择过时的 fiber 的惰性一步）；`sim_back`/`back_run`、`sim_fwd`/`fwd_run` |
 | `theories/Examples.v` | 两个实例、导出名并列、更高优先级者胜出、改绑、同一处理器并发触发，均为计算验证 |

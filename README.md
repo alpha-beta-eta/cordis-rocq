@@ -26,9 +26,16 @@ of dsh plugins; plugins' business logic is out of scope.
   replayed on `step` extracted from `Calculus.v`, and the states are compared. About 270 000 orchestration
   scripts; the only divergences are differences c (insert-time conflicts) and e (concurrent disposers),
   each with a three-step witness. A first step toward the refinement of DESIGN D6.
-- [keys/](keys/): hygiene for keys (design only so far): a provided service is private to the
-  provider's subtree, scoped by instance, unless exported; an exported name with several providers
-  resolves like a contribution key, so a conflict is a value, not a failure.
+- [keys/](keys/): hygiene for keys, kept apart from the core (own build, `keys/build.sh`): a provided
+  service is private to the provider's subtree, scoped by instance, unless exported; an exported name
+  with several providers resolves to the unique highest priority, so a conflict is a value, not a
+  failure (done, with functional extensionality as the only axiom, used by conservativity alone:
+  reduction to the core, safety where insertion, spawn and reaction never
+  conflict, termination with rebinding, progress, confluence without and with spawn and under
+  interleaved orchestration with static assembly, and conservativity: with every name exported and
+  no private dependency, the extension and the core on the base table make the same moves, except
+  where the core reports a conflict, an instance id is reused, or a fiber with a stale selection
+  steps inertially).
 - [errors/](errors/): error handling brought into the model, kept apart from the formalization above
   (own build, `errors/build.sh`): failures scoped to their view (done: safety, progress, termination under a new measure, and confluence that includes failed fibers, with spawn under a static obligation that makes spawns never conflict, and under interleaved orchestration with static assembly, under a new obligation that operations which may meet do not reject each other), an admission queue for conflicts with retired fibers (done), a superseded load does not fail (done: a refinement of the core,
   so safety, progress and termination carry over), insert-time conflicts (the cordiverse/cordis#358

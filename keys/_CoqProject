@@ -8,4 +8,5 @@ theories/ScopedProgress.v
 theories/ScopedConf.v
 theories/ScopedSpawn.v
 theories/ScopedDynamic.v
+theories/ScopedCons.v
 theories/Examples.v
