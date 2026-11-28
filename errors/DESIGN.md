@@ -361,7 +361,7 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成 |
 | `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
 | `theories/Classify.v` | 第 3 节第 1 层：失败集合相同时控制状态合流 | 完成 |
-| `theories/IdealFail.v`、`theories/FailCrux.v` | 第 3 节第 2 层：失败集合相同；合流包含失败（不含 spawn） | 完成 |
+| `theories/IdealFail.v`、`theories/FailCrux.v`、`theories/FailConf.v` | 第 3 节第 2 层：每种失败都是理想失败（FailCrux，义务：spawn 出的组件不提供键）；失败集合相同、合流包含失败（FailConf，不含 spawn） | 完成 |
 | `theories/StateConfF.v` | 第 3 节：合流包含失败，服务状态 ≃ | 完成 |
 | `theories/Async.v` | 5.2 | 完成 |
 | `theories/AsyncKind.v` | 5.2：外部失败的归因 | 完成 |

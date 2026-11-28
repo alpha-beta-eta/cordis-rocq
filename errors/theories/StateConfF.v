@@ -18,7 +18,7 @@
 From Stdlib Require Import List PeanoNat Bool Lia RelationClasses Permutation Sorted Wf_nat.
 From Cordis Require Import Prelude Service ServiceSeq Calculus Preservation Ordering
   Recovery Progress Termination Confluence StateInv Episode.
-From CordisErr Require Import ViewFail Classify FailCrux.
+From CordisErr Require Import ViewFail Classify FailCrux FailConf.
 Import ListNotations.
 
 Section StateConfF.
@@ -478,7 +478,7 @@ Section StateConfF.
     { intros vs R Q.
       destruct (vlrun_reach K_eq_dec Σ prog vs0 vs ls0 H0 N0 R) as (ls & H & N).
       destruct (finv_reachable K_eq_dec Σ prog Kb HK rank Hrank Total Hwb HUI HTI HRI HCom
-                  HNoRej NoSpawn HProv vs ls H N) as [P _].
+                  HNoRej (fun c c' Hs => False_ind _ (NoSpawn c c' Hs)) HProv vs ls H N) as [P _].
       split; [exact P|].
       exact (vquiet_settled K_eq_dec Σ prog Kb rank Rb Hrank Hbnd vs
                (cinv_vreach K_eq_dec Σ prog Kb HK Total NoSpawn vs ls H N) Q). }

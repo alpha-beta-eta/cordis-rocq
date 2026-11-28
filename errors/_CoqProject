@@ -9,6 +9,7 @@ theories/VTermination.v
 theories/Classify.v
 theories/IdealFail.v
 theories/FailCrux.v
+theories/FailConf.v
 theories/Async.v
 theories/Resource.v
 theories/AsyncKind.v
