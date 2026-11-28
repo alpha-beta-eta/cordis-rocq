@@ -1,0 +1,7 @@
+(compare "together" "apart")
+(labels a (OInsert provider) (OInsert consumer) (LBegin 0) (LStep 0) (LStep 0) (LBegin 1) (LStep 1) (LStep 1))
+(labels b (OInsert provider) (LBegin 0) (LStep 0) (LStep 0) (OInsert consumer) (LBegin 2) (LStep 2) (LStep 2))
+(final a (comp provider (Active)) (comp consumer (Active)) (key tools (by provider) (entries (7 42))) (quiet #t))
+(final b (comp provider (Active)) (comp consumer (Active)) (key tools (by provider) (entries (7 42))) (quiet #t))
+(differ)
+(same #t)

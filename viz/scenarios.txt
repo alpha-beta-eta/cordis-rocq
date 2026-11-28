@@ -1,0 +1,115 @@
+# 可视化用的场景：组件表 + 标签序列。格式见 calc/trace.ml 开头的注释。
+# 每个场景都对应 Rocq 中已经算过的例子；这里的标签序列与那里逐字相同。
+
+scenario basic
+title 提供者与消费者
+source theories/Examples/Basic.v
+note 组件 0 提供 tools（空登记表），组件 1 依赖 tools 并登记 7↦42。
+note 一次完整的生命周期：消费者等提供者 Active 才开始加载；提供者被 dispose 后，消费者先离开，提供者撤回 tools 要等消费者卸载完（守卫 held）；最后插入新的提供者，消费者重新加载。
+note 标成"被拒"的步骤是 step 返回 None 的标签：consumer_waits 与 provider_blocked 两个例子。
+mode core
+key 0 tools
+comp 0 provider | deps - | provs 0 | provide 0
+comp 1 consumer | deps 0 | provs - | op 0 7 42
+schedule lifecycle
+  OInsert 0, OInsert 1, LBegin 1,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, LStep 1, LStep 1,
+  ODispose 0, LLeave 0, LLeave 1, LUndo 0,
+  LUndo 1, LUnloaded 1, LUndo 0, LUnloaded 0, LRemove 0,
+  OInsert 0, LBegin 4, LStep 4, LStep 4,
+  LBegin 1, LStep 1, LStep 1
+schedule divert
+  OInsert 0, OInsert 1,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, ODispose 0, LLeave 0,
+  LDivert 1, LUnloaded 1,
+  LUndo 0, LUnloaded 0, LRemove 0
+
+scenario basic-confluence
+title 同样的输入，两种交错
+source theories/Confluence.v（示意）
+note 同样两个编排输入 OInsert 0、OInsert 1，第二个输入在提供者加载之前或之后到来。名字从同一个计数器取，所以两边的名字与 pid 不同，终态在重命名意义下一致：这就是合流定理的形状。
+mode core
+key 0 tools
+comp 0 provider | deps - | provs 0 | provide 0
+comp 1 consumer | deps 0 | provs - | op 0 7 42
+schedule together
+  OInsert 0, OInsert 1, LBegin 0, LStep 0, LStep 0, LBegin 1, LStep 1, LStep 1
+schedule apart
+  OInsert 0, LBegin 0, LStep 0, LStep 0, OInsert 1, LBegin 2, LStep 2, LStep 2
+compare together apart
+
+scenario c358
+title cordiverse/cordis#358：插入时不检查冲突
+source errors/theories/Admit.v, errors/theories/Queue.v
+note 旧提供者（fiber 0）已被 dispose，消费者（fiber 1）还持有 tools，这时编排者插入新的提供者。
+note 核心拒绝这次插入（core 一栏的 OInsert 0 被拒），编排者只能等旧 fiber 移除后重试。
+note astep 照 Cordis 的做法接纳任何插入（admit 模式）：新提供者（名字 4）若在旧绑定撤回之前加载（early），provide 撞上旧绑定，以 EConflict 失败，消费者停在 Inactive、tools 未绑定，而且再也走不动；若在之后加载（late），一切 Active。同样的输入，两种静止的结局。
+note 接纳队列（queue 模式，Queue.v）把这次插入放进队列，旧 fiber 移除后才接纳，只有一种结局。
+mode admit
+key 0 tools
+comp 0 provider | deps - | provs 0 | provide 0
+comp 1 consumer | deps 0 | provs - | op 0 7 42
+prefix
+  OInsert 0, OInsert 1,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, LStep 1, LStep 1,
+  ODispose 0, LLeave 0, LLeave 1,
+  OInsert 0
+schedule early
+  LBegin 4, LStep 4, LUnloaded 4,
+  LUndo 1, LUnloaded 1, LUndo 0, LUnloaded 0, LRemove 0,
+  LBegin 1, LBegin 4
+schedule late
+  LUndo 1, LUnloaded 1, LUndo 0, LUnloaded 0, LRemove 0,
+  LBegin 4, LStep 4, LStep 4, LBegin 1, LStep 1, LStep 1
+schedule core mode=core
+  LUndo 1, LUnloaded 1, LUndo 0, LUnloaded 0, LRemove 0,
+  OInsert 0, LBegin 4, LStep 4, LStep 4,
+  LBegin 1, LStep 1, LStep 1
+schedule queue mode=queue noprefix
+  QIns 0, QAdmit, QIns 1, QAdmit,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, LStep 1, LStep 1,
+  ODispose 0, LLeave 0, LLeave 1,
+  QIns 0, QAdmit,
+  LUndo 1, LUnloaded 1, LUndo 0, LUnloaded 0, LRemove 0,
+  QAdmit, LBegin 4, LStep 4, LStep 4,
+  LBegin 1, LStep 1, LStep 1
+compare early late
+compare early queue
+
+scenario viewfail
+title 比原因活得更久的失败
+source errors/theories/ViewFail.v
+note 组件 0 提供 tools 时名字 7 已被占（7↦0），组件 2 提供空的 tools，组件 1 是 Basic 的消费者（登记 7↦42）。在组件 0 之下消费者以 EOp 失败，在组件 2 之下成功。
+note 核心中（A、B 两栏）：同样的编排输入，A 让消费者先在组件 0 下加载并失败，之后组件 0 换成组件 2，消费者仍是 Inactive EOp，因为只有编排者能 O-Reset；B 中组件 0 在加载前就被移除，消费者在组件 2 下成功。两个终态都静止却不同（core_diverges）。
+note 失败按视图记录（A+、B+ 两栏，view 模式）：L-Unloaded 记下失败时的视图，目标改变之后 VClear 清除失败，A 继续走到与 B 相同的终态（view_agrees）。
+mode core
+key 0 tools
+comp 0 provider7 | deps - | provs 0 | provide 0 7=0
+comp 1 consumer | deps 0 | provs - | op 0 7 42
+comp 2 provider | deps - | provs 0 | provide 0
+schedule A
+  OInsert 0, OInsert 1,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, LStep 1, LUnloaded 1,
+  ODispose 0, LLeave 0, LUndo 0, LUnloaded 0, LRemove 0,
+  OInsert 2, LBegin 4, LStep 4, LStep 4,
+  LBegin 1
+schedule B
+  OInsert 0, OInsert 1,
+  ODispose 0, LRemove 0,
+  OInsert 2, LBegin 2, LStep 2, LStep 2,
+  LBegin 1, LStep 1, LStep 1
+schedule A+ mode=view
+  OInsert 0, OInsert 1,
+  LBegin 0, LStep 0, LStep 0,
+  LBegin 1, LStep 1, LUnloaded 1,
+  ODispose 0, LLeave 0, LUndo 0, LUnloaded 0, LRemove 0,
+  OInsert 2, LBegin 4, LStep 4, LStep 4,
+  VClear 1, LBegin 1, LStep 1, LStep 1
+schedule B+ mode=view extends=B
+compare A B
+compare A+ B+

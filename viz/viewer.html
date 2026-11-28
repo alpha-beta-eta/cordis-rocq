@@ -1,0 +1,352 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cordis 执行轨迹</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* 布局：顶部场景切换与说明；下方两栏并排，每栏是一个调度（步骤条 + 当前状态）；最下是终态对比。 */
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --ink: #1b2130; --muted: #5d6679; --line: #dde1e8; --soft: #eceff4;
+  --accent: #2f5bd3; --accent-soft: #e3eafc;
+  --s-inactive: #7a8396; --s-loading: #b7791f; --s-active: #2f855a; --s-unloading: #6b46c1;
+  --err: #c53030; --err-soft: #fde8e8; --chg: #fff3c4; --chg-line: #e0b400; --orch: #0f7c8c;
+  --f-sans: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Microsoft YaHei", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151c; --panel: #1a1f29; --ink: #e4e8f0; --muted: #98a2b6; --line: #2c3342; --soft: #222835;
+  --accent: #7c9cff; --accent-soft: #24304f;
+  --s-inactive: #8f98ab; --s-loading: #e3a43c; --s-active: #52c08a; --s-unloading: #a88bf0;
+  --err: #ff7a7a; --err-soft: #3a1f24; --chg: #3a3417; --chg-line: #c9a531; --orch: #4cc3d3; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151c; --panel: #1a1f29; --ink: #e4e8f0; --muted: #98a2b6; --line: #2c3342; --soft: #222835;
+  --accent: #7c9cff; --accent-soft: #24304f;
+  --s-inactive: #8f98ab; --s-loading: #e3a43c; --s-active: #52c08a; --s-unloading: #a88bf0;
+  --err: #ff7a7a; --err-soft: #3a1f24; --chg: #3a3417; --chg-line: #c9a531; --orch: #4cc3d3; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 16px }
+h1 { font-size: 22px; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance }
+h2 { font-size: 16px; margin: 0; font-weight: 600; text-wrap: balance }
+h3 { font-size: 12px; margin: 0; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase }
+.mono, code { font-family: var(--f-mono); font-size: 12.5px }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between }
+.sub { color: var(--muted) }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px }
+button, select { font: inherit; color: inherit }
+.tab { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 6px; cursor: pointer }
+.tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff }
+.tab:focus-visible, button:focus-visible, select:focus-visible, .stepchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.intro { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px }
+.intro p { margin: 0; max-width: 80ch }
+.comps { display: flex; flex-wrap: wrap; gap: 8px }
+.comp { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--soft); min-width: 0 }
+.comp b { font-family: var(--f-mono) }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12.5px; align-items: center }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr } }
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 12px; min-width: 0 }
+.colhead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between }
+.colhead select { border: 1px solid var(--line); background: var(--soft); border-radius: 6px; padding: 4px 8px; font-family: var(--f-mono) }
+.mode { font-family: var(--f-mono); font-size: 11.5px; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent) }
+.nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
+.nav button { border: 1px solid var(--line); background: var(--soft); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-family: var(--f-mono) }
+.nav button:disabled { opacity: .4; cursor: default }
+.pos { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; max-height: 148px; overflow-y: auto; padding: 2px }
+.stepchip { font-family: var(--f-mono); font-size: 11.5px; border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 1px 6px; cursor: pointer; white-space: nowrap }
+.stepchip.orch { color: var(--orch); font-weight: 600 }
+.stepchip.prefix { border-style: dashed }
+.stepchip.refused { color: var(--err); text-decoration: line-through }
+.stepchip.done { background: var(--soft) }
+.stepchip.cur { background: var(--accent); color: #fff; border-color: var(--accent); text-decoration: none }
+.stepchip.cur.refused { background: var(--err); border-color: var(--err) }
+.stepchip.start { color: var(--muted) }
+.last { border-radius: 6px; padding: 8px 10px; background: var(--soft); display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline }
+.last.refused { background: var(--err-soft) }
+.last .lbl { font-family: var(--f-mono); font-weight: 600 }
+.fibers { display: grid; gap: 8px }
+.fiber { border: 1px solid var(--line); border-left: 4px solid var(--st); border-radius: 6px; padding: 8px 10px; display: grid; gap: 4px; min-width: 0 }
+.fiber.subj { box-shadow: 0 0 0 2px var(--accent-soft) }
+.fiber.gone { opacity: .55; border-style: dashed; border-left-style: solid }
+.fiber .top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.fname { font-family: var(--f-mono); font-weight: 600 }
+.pill { font-size: 11.5px; font-weight: 600; padding: 0 8px; border-radius: 10px; color: #fff; background: var(--st) }
+.errm { font-family: var(--f-mono); font-size: 11.5px; font-weight: 600; color: var(--err); border: 1px solid var(--err); border-radius: 10px; padding: 0 6px }
+.tag { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 6px }
+.tag.warn { color: var(--err); border-color: var(--err) }
+.row { display: grid; grid-template-columns: 4.2em 1fr; gap: 6px; align-items: baseline; font-size: 12.5px; min-width: 0 }
+.row > span:first-child { color: var(--muted) }
+.row > span:last-child { min-width: 0; overflow-wrap: anywhere }
+.items { display: flex; flex-wrap: wrap; gap: 4px }
+.item { font-family: var(--f-mono); font-size: 11.5px; background: var(--soft); border-radius: 4px; padding: 0 6px }
+.item.head { outline: 1px solid var(--muted) }
+.prog .item:first-child { background: var(--accent-soft); color: var(--accent) }
+.pill.chg { background: var(--st); box-shadow: 0 0 0 2px var(--chg-line) }
+.chg { background: var(--chg); box-shadow: inset 0 0 0 1px var(--chg-line); border-radius: 4px }
+.st-Inactive { --st: var(--s-inactive) } .st-Loading { --st: var(--s-loading) } .st-Active { --st: var(--s-active) } .st-Unloading { --st: var(--s-unloading) }
+.children { display: grid; gap: 8px; margin-left: 18px; padding-left: 10px; border-left: 1px dotted var(--line) }
+.binds { display: grid; gap: 6px }
+.bind { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px }
+.empty { color: var(--muted); font-size: 12.5px }
+.enabled { display: flex; flex-wrap: wrap; gap: 4px; align-items: center }
+.quiet { font-size: 11.5px; font-weight: 600; padding: 0 8px; border-radius: 10px; background: var(--s-active); color: #fff }
+.final { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px }
+.tbl { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { color: var(--muted); font-weight: 500 }
+td.diff { background: var(--err-soft) }
+.verdict { font-weight: 600 }
+.verdict.same { color: var(--s-active) } .verdict.differ { color: var(--err) }
+.loader { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12.5px; flex-wrap: wrap }
+@media (prefers-reduced-motion: no-preference) { .chg { transition: background .3s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Cordis 执行轨迹</h1>
+      <div class="sub">生命周期演算的执行，逐步展示。每个状态都由从 Rocq 抽取的 step 计算得到。</div>
+    </div>
+    <label class="loader" for="file">载入别的轨迹（trace 输出的 JSON）<input id="file" type="file" accept=".json,application/json"></label>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <section class="intro" id="intro"></section>
+  <div class="legend">
+    <span><span class="pill st-Inactive">Inactive</span></span>
+    <span><span class="pill st-Loading">Loading</span></span>
+    <span><span class="pill st-Active">Active</span></span>
+    <span><span class="pill st-Unloading">Unloading</span></span>
+    <span><span class="errm">EOp</span> 错误标记</span>
+    <span><span class="item chg">黄底</span> 上一步改变的部分</span>
+    <span><span class="stepchip orch">OInsert</span> 编排输入</span>
+    <span><span class="stepchip">LStep</span> 生命周期步</span>
+    <span><span class="stepchip refused">被拒</span> step 返回 None</span>
+    <span>虚线框：共同前缀</span>
+    <span>键盘：← → 移动左栏，Shift + ← → 移动右栏</span>
+  </div>
+  <div class="cols" id="cols"></div>
+  <section class="final" id="final"></section>
+</div>
+
+<script src="traces.js"></script>
+<script>
+(function () {
+  "use strict";
+  let DATA = Array.isArray(window.CORDIS_TRACES) ? window.CORDIS_TRACES : [];
+  const ui = { sc: 0, cols: [{ sched: 0, pos: 0 }, { sched: 1, pos: 0 }] };
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const h = (tag, attrs, ...kids) => {
+    const e = document.createElement(tag);
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+    return e;
+  };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  function sc() { return DATA[ui.sc] }
+  const keyName = k => { const x = sc().keys.find(e => e.k === k); return x ? x.name : "k" + k };
+  const compName = c => { const x = sc().comps.find(e => e.c === c); return x ? x.name : "c" + c };
+  const viewText = w => w == null ? "⊥" : w.length === 0 ? "∅" : w.map(([k, p]) => keyName(k) + "→p" + p).join(", ");
+  const undoText = u => u.kind === "op" ? "reg " + keyName(u.k) + " " + (u.name ?? "?") + " ·p" + u.pid
+    : u.kind === "prov" ? "prov " + keyName(u.k) + " ·p" + u.pid : "spawn #" + u.m;
+
+  function initCols() {
+    const s = sc(), n = s.schedules.length;
+    let a = 0, b = Math.min(1, n - 1);
+    if (s.compare && s.compare.length) {
+      const idx = nm => Math.max(0, s.schedules.findIndex(x => x.name === nm));
+      a = idx(s.compare[0][0]); b = idx(s.compare[0][1]);
+    }
+    ui.cols = [{ sched: a, pos: s.schedules[a].steps.length }, { sched: b, pos: s.schedules[b].steps.length }];
+    if (n === 1) ui.cols.length = 1;
+  }
+
+  function renderTabs() {
+    const t = $("#tabs"); t.replaceChildren();
+    DATA.forEach((s, i) => t.append(h("button", { class: "tab", role: "tab", "aria-selected": i === ui.sc ? "true" : "false",
+      onclick: () => { ui.sc = i; initCols(); renderAll(); try { localStorage.setItem("cordis-viz-sc", s.id) } catch (e) {} } }, s.title)));
+  }
+
+  function renderIntro() {
+    const s = sc(), el = $("#intro"); el.replaceChildren();
+    el.append(h("div", { class: "colhead" }, h("h2", null, s.title), h("span", { class: "sub mono" }, s.source)));
+    s.notes.forEach(n => el.append(h("p", null, n)));
+    el.append(h("div", { class: "comps" }, s.comps.map(c => h("div", { class: "comp" },
+      h("b", null, "c" + c.c + " " + c.name), " ",
+      h("span", { class: "sub" }, "依赖 " + (c.deps.map(keyName).join(", ") || "∅") + "；提供 " + (c.provs.map(keyName).join(", ") || "∅")),
+      h("div", { class: "items" }, c.body.map(x => h("span", { class: "item" }, x)))))));
+    if (s.compare && s.compare.length > 1) el.append(h("div", { class: "nav" }, h("span", { class: "sub" }, "对比："),
+      s.compare.map(([a, b]) => h("button", { onclick: () => {
+        const ia = s.schedules.findIndex(x => x.name === a), ib = s.schedules.findIndex(x => x.name === b);
+        ui.cols = [{ sched: ia, pos: s.schedules[ia].steps.length }, { sched: ib, pos: s.schedules[ib].steps.length }]; renderCols(); renderFinal();
+      } }, a + " ↔ " + b))));
+  }
+
+  function fiberCard(f, prev, subj, gone, byParent, st) {
+    const pf = prev && prev.fibers.find(x => x.n === f.n);
+    const ch = field => !gone && (!pf || !eq(pf[field], f[field]));
+    const isNew = !gone && prev && !pf;
+    const card = h("div", { class: "fiber st-" + f.life + (subj ? " subj" : "") + (gone ? " gone" : "") + (isNew ? " chg" : "") },
+      h("div", { class: "top" },
+        h("span", { class: "fname" }, "#" + f.n + " " + compName(f.comp)),
+        h("span", { class: "pill" + (ch("life") ? " chg" : "") }, f.life),
+        f.err && h("span", { class: "errm" }, f.err),
+        f.disposed && h("span", { class: "tag" + (ch("disposed") ? " chg" : "") }, "disposed"),
+        f.held && f.life === "Unloading" && h("span", { class: "tag warn" }, "held：依赖者仍持有它的提供"),
+        gone && h("span", { class: "tag" }, "已移除"),
+        isNew && h("span", { class: "tag" }, "新插入")),
+      f.view && h("div", { class: "row" }, h("span", null, "视图"), h("span", { class: "mono" + (ch("view") ? " chg" : "") }, viewText(f.view))),
+      h("div", { class: "row" }, h("span", null, "目标"), h("span", { class: "mono" + (ch("target") ? " chg" : "") }, viewText(f.target), " ",
+        f.view && !eq(f.view, f.target) ? h("span", { class: "tag warn" }, "与视图不同") : null)),
+      "fview" in f && f.fview != null && h("div", { class: "row" }, h("span", null, "失败视图"), h("span", { class: "mono" + (ch("fview") ? " chg" : "") }, viewText(f.fview))),
+      f.prog && h("div", { class: "row" }, h("span", null, "程序"), h("span", { class: "items prog" + (ch("prog") ? " chg" : "") }, f.prog.map(x => h("span", { class: "item" }, x)))),
+      f.life !== "Inactive" && h("div", { class: "row" }, h("span", null, "累加器"), h("span", { class: "items" + (ch("acc") ? " chg" : "") },
+        f.acc.length ? f.acc.map((u, i) => h("span", { class: "item" + (i === 0 ? " head" : ""), title: i === 0 ? "头：下一个撤销的" : null }, undoText(u))) : h("span", { class: "empty" }, "空"))));
+    const kids = (byParent.get(f.n) || []);
+    if (!kids.length) return card;
+    return h("div", null, card, h("div", { class: "children" }, kids.map(k => fiberCard(k.f, prev, k.subj, k.gone, byParent, st))));
+  }
+
+  function renderState(s, sched, pos) {
+    const st = sched.states[pos], prev = pos > 0 ? sched.states[pos - 1] : null;
+    const step = pos > 0 ? sched.steps[pos - 1] : null;
+    const subj = step ? step.subject : null;
+    const all = st.fibers.map(f => ({ f, gone: false, subj: f.n === subj }));
+    if (prev) prev.fibers.forEach(f => { if (!st.fibers.some(x => x.n === f.n)) all.push({ f, gone: true, subj: f.n === subj }) });
+    all.sort((a, b) => a.f.n - b.f.n);
+    const byParent = new Map(), roots = [];
+    for (const x of all) {
+      const p = x.f.parent;
+      if (p != null && all.some(y => y.f.n === p)) { if (!byParent.has(p)) byParent.set(p, []); byParent.get(p).push(x) } else roots.push(x);
+    }
+    const out = [];
+    out.push(h("div", { class: "last" + (step && !step.ok ? " refused" : "") },
+      step ? [h("span", { class: "lbl" }, step.label), h("span", { class: "sub" },
+        step.ok ? (step.kind === "orch" ? "编排输入" : "生命周期步") : "被拒：step 返回 None，状态不变")]
+        : h("span", { class: "sub" }, "初始状态")));
+    out.push(h("h3", null, "Fiber"));
+    out.push(h("div", { class: "fibers" }, roots.length ? roots.map(x => fiberCard(x.f, prev, x.subj, x.gone, byParent, st)) : h("span", { class: "empty" }, "没有 fiber")));
+    out.push(h("h3", null, "绑定"));
+    const keys = new Set([...st.binds.map(b => b.k), ...(prev ? prev.binds.map(b => b.k) : [])]);
+    out.push(h("div", { class: "binds" }, keys.size ? [...keys].sort().map(k => {
+      const b = st.binds.find(x => x.k === k), pb = prev && prev.binds.find(x => x.k === k);
+      const changed = prev && !eq(b, pb);
+      if (!b) return h("div", { class: "bind chg" }, h("b", { class: "mono" }, keyName(k)), h("span", { class: "sub" }, "已撤回"));
+      return h("div", { class: "bind" + (changed ? " chg" : "") }, h("b", { class: "mono" }, keyName(k)),
+        h("span", { class: "mono" }, "pid p" + b.pid), h("span", null, "提供者 #" + b.owner),
+        h("span", { class: "mono" }, "{" + b.entries.map(([x, v]) => x + "↦" + v).join(", ") + "}"));
+    }) : h("span", { class: "empty" }, "没有键被绑定")));
+    if (st.queue) out.push(h("h3", null, "接纳队列"), h("div", { class: "items" + (prev && !eq(prev.queue, st.queue) ? " chg" : "") },
+      st.queue.length ? st.queue.map(([t, c]) => h("span", { class: "item" }, "票 " + t + "：" + compName(c))) : h("span", { class: "empty" }, "空")));
+    out.push(h("h3", null, "此刻能走的生命周期步"));
+    out.push(h("div", { class: "enabled" }, st.quiet ? h("span", { class: "quiet" }, "静止 quiet") : st.enabled.map(l => h("span", { class: "item" }, l))));
+    return out;
+  }
+
+  function renderCols() {
+    const s = sc(), el = $("#cols"); el.replaceChildren();
+    el.style.gridTemplateColumns = ui.cols.length === 1 ? "1fr" : "";
+    ui.cols.forEach((c, ci) => {
+      const sched = s.schedules[c.sched], N = sched.steps.length;
+      const go = p => { c.pos = Math.max(0, Math.min(N, p)); renderCols() };
+      const sel = h("select", { id: "sched-" + ci, "aria-label": "调度", onchange: e => { c.sched = +e.target.value; c.pos = s.schedules[c.sched].steps.length; renderCols(); renderFinal() } },
+        s.schedules.map((x, i) => h("option", { value: i, selected: i === c.sched }, x.name)));
+      const chips = [h("button", { class: "stepchip start" + (c.pos === 0 ? " cur" : ""), onclick: () => go(0) }, "初始")];
+      sched.steps.forEach((x, i) => chips.push(h("button", {
+        class: "stepchip" + (x.kind === "orch" ? " orch" : "") + (i < sched.prefix ? " prefix" : "") + (!x.ok ? " refused" : "") + (i < c.pos - 1 ? " done" : "") + (i === c.pos - 1 ? " cur" : ""),
+        title: (i < sched.prefix ? "共同前缀 · " : "") + (x.ok ? "" : "被拒 · ") + "第 " + (i + 1) + " 步", onclick: () => go(i + 1) }, x.label)));
+      el.append(h("section", { class: "col", "aria-label": sched.name },
+        h("div", { class: "colhead" }, h("div", { class: "nav" }, sel, h("span", { class: "mode" }, sched.mode)),
+          h("div", { class: "nav" },
+            h("button", { onclick: () => go(0), disabled: c.pos === 0, "aria-label": "到开头" }, "⏮"),
+            h("button", { onclick: () => go(c.pos - 1), disabled: c.pos === 0, "aria-label": "上一步" }, "◀"),
+            h("span", { class: "pos" }, c.pos + " / " + N),
+            h("button", { onclick: () => go(c.pos + 1), disabled: c.pos === N, "aria-label": "下一步" }, "▶"),
+            h("button", { onclick: () => go(N), disabled: c.pos === N, "aria-label": "到结尾" }, "⏭"))),
+        h("div", { class: "steps" }, chips),
+        ...renderState(s, sched, c.pos)));
+      const cur = el.lastChild.querySelector(".stepchip.cur");
+      if (cur) { const box = cur.parentElement; box.scrollTop = cur.offsetTop - box.offsetTop - 40 }
+    });
+  }
+
+  // 终态在重命名意义下比较：fiber 按组件（同一组件的第几个实例）对应，绑定按键对应，比较提供者的组件与登记表内容。
+  function summary(st) {
+    const rows = new Map(), count = {};
+    st.fibers.slice().sort((a, b) => a.n - b.n).forEach(f => {
+      const i = count[f.comp] = (count[f.comp] || 0) + 1;
+      rows.set("f:" + f.comp + ":" + i, { label: compName(f.comp) + (i > 1 ? " (" + i + ")" : ""), text: f.life + (f.err ? " " + f.err : "") + (f.disposed ? " disposed" : ""), name: "#" + f.n });
+    });
+    st.binds.forEach(b => {
+      const o = st.fibers.find(f => f.n === b.owner);
+      rows.set("k:" + b.k, { label: "键 " + keyName(b.k), text: "由 " + (o ? compName(o.comp) : "#" + b.owner) + " 提供 {" + b.entries.map(([x, v]) => x + "↦" + v).join(", ") + "}", name: "p" + b.pid });
+    });
+    sc().keys.forEach(k => { if (!rows.has("k:" + k.k)) rows.set("k:" + k.k, { label: "键 " + k.name, text: "未绑定", name: "" }) });
+    return rows;
+  }
+
+  function renderFinal() {
+    const s = sc(), el = $("#final"); el.replaceChildren();
+    el.append(h("h2", null, "终态对比"));
+    if (ui.cols.length < 2) { el.append(h("p", { class: "sub" }, "这个场景只有一个调度。")); return }
+    const [A, B] = ui.cols.map(c => s.schedules[c.sched]);
+    const fa = A.states[A.states.length - 1], fb = B.states[B.states.length - 1];
+    const sa = summary(fa), sb = summary(fb);
+    const keys = [...new Set([...sa.keys(), ...sb.keys()])].sort();
+    let same = fa.quiet === fb.quiet;
+    const rows = keys.map(k => {
+      const a = sa.get(k), b = sb.get(k), d = !a || !b || a.text !== b.text;
+      if (d) same = false;
+      return h("tr", null, h("td", null, (a || b).label),
+        h("td", { class: d ? "diff" : null }, a ? [a.text, " ", h("span", { class: "sub mono" }, a.name)] : "—"),
+        h("td", { class: d ? "diff" : null }, b ? [b.text, " ", h("span", { class: "sub mono" }, b.name)] : "—"));
+    });
+    rows.push(h("tr", null, h("td", null, "静止"), h("td", { class: fa.quiet !== fb.quiet ? "diff" : null }, fa.quiet ? "是" : "否"), h("td", { class: fa.quiet !== fb.quiet ? "diff" : null }, fb.quiet ? "是" : "否")));
+    // 编排输入：两边按顺序相同（QIns c 记作 OInsert c）才算同样的输入。
+    const inputs = S => S.steps.filter(x => x.kind === "orch").map(x => x.label.replace(/^QIns /, "OInsert ")).join("; ");
+    const sameIn = inputs(A) === inputs(B);
+    const inText = sameIn ? "编排输入相同（" + (inputs(A) || "无") + "）" : "编排输入不同";
+    el.append(h("p", { class: "verdict " + (same ? "same" : "differ") }, same
+      ? A.name + " 与 " + B.name + " 的终态在重命名意义下一致（名字与 pid 可以不同）。"
+      : A.name + " 与 " + B.name + " 的终态不同。" + (sameIn ? "输入相同，结局取决于调度。" : "")));
+    el.append(h("p", { class: "sub" }, inText + "。"));
+    el.append(h("div", { class: "tbl" }, h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, A.name + "（" + A.mode + "）"), h("th", null, B.name + "（" + B.mode + "）"))), h("tbody", null, rows))));
+    el.append(h("p", { class: "sub" }, "fiber 按组件对应（同一组件的第几个实例），绑定按键对应；灰色是各自的名字或 pid。"));
+  }
+
+  function renderAll() {
+    if (!DATA.length) { $("#intro").replaceChildren(h("p", null, "没有轨迹。用 viz/build.sh 生成 traces.js，或在右上角载入 JSON。")); return }
+    renderTabs(); renderIntro(); renderCols(); renderFinal();
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.target.closest && e.target.closest("select, input")) return;
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const c = ui.cols[e.shiftKey && ui.cols.length > 1 ? 1 : 0]; if (!c) return;
+    const N = sc().schedules[c.sched].steps.length;
+    c.pos = Math.max(0, Math.min(N, c.pos + (e.key === "ArrowRight" ? 1 : -1))); e.preventDefault(); renderCols();
+  });
+  $("#file").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    f.text().then(t => { DATA = JSON.parse(t); ui.sc = 0; initCols(); renderAll() })
+      .catch(err => { $("#intro").replaceChildren(h("p", null, "读不了这个文件：" + err.message + "。需要 trace 输出的 JSON（场景数组）。")) });
+  });
+
+  if (DATA.length) {
+    let stored = null;
+    try { stored = localStorage.getItem("cordis-viz-sc") } catch (e) {}
+    const i = DATA.findIndex(s => s.id === (stored || "c358"));
+    if (i >= 0) ui.sc = i;
+    initCols();
+  }
+  renderAll();
+})();
+</script>

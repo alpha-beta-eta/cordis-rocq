@@ -30,6 +30,9 @@ raco test L2.rkt     # 本层的全部检查
 sh build.sh          # 测试全部各层, 重新生成 diffs/
 ```
 
+L6 的执行也可以输出为 S-表达式，格式与 Rocq 一侧（`viz/Text.v`）相同，并逐个与之比较：见
+[viz/l6.rkt](../viz/l6.rkt) 与 [viz/DESIGN.md](../viz/DESIGN.md) 第 A 节。
+
 ## 与 programs/ 的关系
 
 L6 的演算（第2–5节：程序、状态、派生概念、规则）与 [programs/cordis1.rkt](../programs/cordis1.rkt) 逐行相同，只有三行注释略有出入；不变式的条目编号也一致。检查部分的不同：
