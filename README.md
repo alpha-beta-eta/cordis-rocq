@@ -29,7 +29,7 @@ of dsh plugins; plugins' business logic is out of scope.
 - [errors/](errors/): error handling brought into the model, kept apart from the formalization above
   (own build, `errors/build.sh`): failures scoped to their view (done: safety, progress, termination under a new measure, and confluence that includes failed fibers, without spawn, under a new obligation that operations which may meet do not reject each other), an admission queue for conflicts with retired fibers (done), a superseded load does not fail (done: a refinement of the core,
   so safety, progress and termination carry over), insert-time conflicts (the cordiverse/cordis#358
-  counterexample, computed), and in design: deterministic external reads, failing resource releases, and which failures
+  counterexample, computed), deterministic external reads (done: a core instance) and failing resource releases (done: nothing leaks silently); and which failures
   confluence can include.
 - [layers/](layers/): the calculus presented in seven Racket layers (services, lifecycle,
   dependencies, confluence, spawn, reactions, orchestration), each a self-contained file that

@@ -34,5 +34,5 @@ sh errors/build.sh
 | `theories/VTermination.v` | 新度量下的终止：失败按视图记录之后生命周期步仍不会无限进行 | 完成 |
 | `theories/Classify.v` | 合流包含失败，第 1 层：失败集合相同时控制状态合流 | 完成 |
 | `theories/IdealFail.v`、`theories/FailCrux.v` | 合流包含失败，第 2 层：失败都是理想失败，两次执行失败集合相同；主定理 `vconfluence_failures`（不含 spawn；新义务 `HNoRej`、`HProv`） | 完成 |
-| `theories/Async.v` | 确定的外部读取 | 待做 |
-| `theories/Resource.v` | 外部资源的释放失败 | 待做 |
+| `theories/Async.v` | 确定的外部读取：按世界展开即核心组件表，核心定理原样适用；组件义务写在扩展程序上 | 完成 |
+| `theories/Resource.v` | 外部资源的释放失败：每一步都是核心的一步；没有静默的泄漏；全部卸载后每个获取都已释放或记为泄漏 | 完成 |
