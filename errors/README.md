@@ -30,7 +30,8 @@ sh errors/build.sh
 | `theories/Superseded.v` | 4.0：过时的加载不记失败；核心的精化，安全性、进展、终止直接搬过来 | 完成 |
 | `theories/Admit.v` | 4.1：Cordis 接纳做法的反例（`O-Insert` 不检查冲突）下 #358 的两次执行 | 完成 |
 | `theories/Queue.v` | 5.1：与已退役 fiber 冲突时排队；对应核心执行，终止，quiet 时队列为空，#358 只有一种结局 | 完成 |
-| `theories/ViewFail.v` | 失败按视图记录：对应核心执行，安全性，quiet 时失败都在当前视图下，计算的对比例子 | 完成（终止待做） |
-| `theories/VTermination.v`、`theories/Classify.v` | 新度量下的终止；合流包含失败 | 待做 |
+| `theories/ViewFail.v` | 失败按视图记录：对应核心执行，安全性，quiet 时失败都在当前视图下，计算的对比例子 | 完成 |
+| `theories/VTermination.v` | 新度量下的终止：失败按视图记录之后生命周期步仍不会无限进行 | 完成 |
+| `theories/Classify.v` | 合流包含失败 | 待做 |
 | `theories/Async.v` | 确定的外部读取 | 待做 |
 | `theories/Resource.v` | 外部资源的释放失败 | 待做 |

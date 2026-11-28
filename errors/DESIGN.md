@@ -73,13 +73,18 @@
 | quiet 的可达状态是稳定的，且每个失败的 fiber 都是在当前 target 下失败的 | `vquiet_current` |
 | 计算的例子：同样的编排输入，核心里一种调度让使用者永久失败、另一种全部 Active；加上 `VClear`，前一种继续走到与后一种相同的终态 | `core_diverges`、`core_stuck`、`view_agrees` |
 
-**还没做的两块。**
+**另外两块。**
 
-1. **终止。** 不能从核心搬：`VClear` 之后 fiber 会重新加载，增加工作量，而核心的度量 `Termination.mu` 把
-   失败的 fiber 记为几乎为零。需要改度量：失败标记所在的视图不再是 target 时，按 `Inactive None` 计
-   （有 target 时记为一次完整加载的上界），卸载中的失败 fiber 同理。其余结构（按秩的字典序、一步不影响
-   不高于它的秩）不变，`mu_drop` 一类引理要按新度量重证。成立的原因与核心相同：失败的视图过时，只能是
-   更低秩的提供者换了一次提供，而那一步已经让更低秩的度量下降。
+1. **终止（已完成，`VTermination.v`，约 550 行，没有新公理）。** 不能从核心搬：`VClear` 之后 fiber 会重新
+   加载，增加工作量，而核心的度量 `Termination.mu` 把失败的 fiber 记为几乎为零。新度量 `vmu` 只在三处与
+   `mu` 不同：视图过时的失败 fiber 记为"比有同样 target 的 `Inactive None` 多一步"；视图过时、带错误的
+   Unloading fiber 记为撤销项加收尾再加同样的量；target 已转向的 Loading fiber 比核心多 1（它现在可能以
+   过时的失败结束，比 divert 多走一步）。证明沿用 `Termination.v` 的结构：走一步的 fiber 的度量下降
+   （`vmu_drop`）；秩不高于它的其他 fiber 不变（`vmu_other`）；于是按秩的字典序下降（`vphi_drop`）；
+   `VClear` 只降低本 fiber 的度量，其余全不变（`vclear_drop`、`vclear_other`）。结论：生命周期步（核心的
+   加上 `VClear`）不会无限进行（`vtermination`、`vtermination_reachable`）。核心关于 target、撤销权重、
+   秩的引理（`lstep_effects`、`target_stable`、`mu_other`、`Wt_*`、`own_item_ne`）原样复用。成立的原因
+   与核心相同：失败的视图过时，只能是更低秩的提供者换了一次提供，而那一步已经让更低秩的度量下降。
 2. **合流包含失败（`Classify.v`）。** 这是主体中最大的一块。核心的第 1 层（控制状态的合流）之所以不看服务
    状态，是因为没有失败时每条路径都走到 `Done`（`Total`）；一旦失败进来，一个 fiber 的控制结局取决于它的
    操作结果，第 1、2 层必须合并，证明的形状接近 `SpawnConf.v`（父 fiber 是否走到某个 spawn 也取决于操作
@@ -270,7 +275,7 @@ target 从未改变，所以第 1 节的规则救不了它：这是接纳的问�
 | 4.0 过时的加载不记失败 | 核心的子集（已证） | 核心的子集 | 核心的子集（已证） | 第 3 节的一块 |
 | 4.1 Cordis 的接纳做法 | — | — | — | 反例（已完成） |
 | 5.1 接纳队列 | 对应核心执行（已证） | 同 | 字典序；quiet 时队列为空（已证） | 同输入同插入顺序 |
-| 第 1、3 节 失败按视图记录 | 对应核心执行（已证） | 同核心 | 进展已证；终止需新度量 | 包含失败（待做） |
+| 第 1、3 节 失败按视图记录 | 对应核心执行（已证） | 同核心 | 进展、终止（新度量）已证 | 包含失败（待做） |
 | 5.2 确定的外部读取 | 核心的实例 | 核心的实例 | 核心的实例 | 核心的实例 |
 | 5.3 资源释放失败 | 迁移引理 | S 上精确；外部精确到泄漏 | 迁移引理 | 同输入 |
 
@@ -299,8 +304,8 @@ difftest 量的是 Cordis 与演算的距离，分歧就是第 7 节建议的证
 | `theories/Superseded.v` | 4.0 | 完成 |
 | `theories/Admit.v` | 4.1 | 完成 |
 | `theories/Queue.v` | 5.1 | 完成（`HKids` 之下） |
-| `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成（终止待做） |
-| `theories/VTermination.v` | 第 1 节：新度量下的终止 | |
+| `theories/ViewFail.v` | 第 1 节：失败按视图记录；对应核心、安全性、quiet 时失败都在当前视图下 | 完成 |
+| `theories/VTermination.v` | 第 1 节：新度量下的终止 | 完成 |
 | `theories/Classify.v` | 第 3 节：合流包含失败 | |
 | `theories/Async.v` | 5.2 | |
 | `theories/Resource.v` | 5.3 | |

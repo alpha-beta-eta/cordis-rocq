@@ -27,9 +27,9 @@ of dsh plugins; plugins' business logic is out of scope.
   scripts; the only divergences are differences c (insert-time conflicts) and e (concurrent disposers),
   each with a three-step witness. A first step toward the refinement of DESIGN D6.
 - [errors/](errors/): error handling brought into the model, kept apart from the formalization above
-  (own build, `errors/build.sh`): an admission queue for conflicts with retired fibers (done), a superseded load does not fail (done: a refinement of the core,
+  (own build, `errors/build.sh`): failures scoped to their view (done: safety, progress, termination under a new measure), an admission queue for conflicts with retired fibers (done), a superseded load does not fail (done: a refinement of the core,
   so safety, progress and termination carry over), insert-time conflicts (the cordiverse/cordis#358
-  counterexample, computed), and in design: failures scoped to their view, deterministic external reads, failing resource releases, and which failures
+  counterexample, computed), and in design: deterministic external reads, failing resource releases, and which failures
   confluence can include.
 - [layers/](layers/): the calculus presented in seven Racket layers (services, lifecycle,
   dependencies, confluence, spawn, reactions, orchestration), each a self-contained file that

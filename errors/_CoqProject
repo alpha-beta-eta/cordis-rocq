@@ -5,3 +5,4 @@ theories/Superseded.v
 theories/Admit.v
 theories/Queue.v
 theories/ViewFail.v
+theories/VTermination.v
